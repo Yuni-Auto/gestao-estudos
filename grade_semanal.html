@@ -124,7 +124,7 @@
   .hour-line{height:56px;border-bottom:1px solid var(--border-soft);}
 
   .event-block{
-    position:absolute;left:3px;right:3px;border-radius:7px;padding:4px 7px;
+    position:absolute;left:3px;right:40%;border-radius:7px;padding:4px 7px;
     font-size:11px;line-height:1.3;overflow:hidden;cursor:default;
     border-left:3px solid transparent;box-shadow:0 1px 3px rgba(20,20,15,0.08);
   }
@@ -133,13 +133,13 @@
   .event-block .ev-acc{font-size:9.5px;opacity:.7;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 
   .routine-block-vis{
-    position:absolute;left:3px;right:3px;border-radius:7px;padding:4px 7px;
-    font-size:10.5px;line-height:1.3;overflow:hidden;pointer-events:none;
+    position:absolute;left:62%;right:3px;border-radius:7px;padding:4px 6px;
+    font-size:10px;line-height:1.25;overflow:hidden;pointer-events:none;white-space:normal;
     border:1.5px dashed var(--ink-faint);color:var(--ink-soft);z-index:1;
     background:repeating-linear-gradient(135deg, rgba(107,114,128,0.09), rgba(107,114,128,0.09) 6px, rgba(107,114,128,0.15) 6px, rgba(107,114,128,0.15) 12px);
   }
-  .routine-block-vis .rb-title{font-weight:600;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-  .routine-block-vis .rb-time{font-family:var(--font-mono);font-size:9.5px;opacity:.8;display:block;}
+  .routine-block-vis .rb-title{font-weight:600;display:block;overflow:hidden;text-overflow:ellipsis;}
+  .routine-block-vis .rb-time{font-family:var(--font-mono);font-size:9px;opacity:.8;display:block;}
   .routine-legend{font-size:11px;color:var(--ink-faint);margin:10px 4px 0;display:none;align-items:center;gap:6px;}
   .routine-legend .swatch{width:14px;height:14px;border-radius:4px;flex-shrink:0;border:1.5px dashed var(--ink-faint);background:repeating-linear-gradient(135deg, rgba(107,114,128,0.09), rgba(107,114,128,0.09) 6px, rgba(107,114,128,0.15) 6px, rgba(107,114,128,0.15) 12px);}
 
@@ -206,9 +206,14 @@
     .grid-body, .day-header-row, .allday-row{grid-template-columns:44px repeat(7,minmax(84px,1fr));}
     .grid-scroll{overflow-x:auto;}
     .hour-label{font-size:9px;padding-right:4px;}
+    .event-block{font-size:9.5px;padding:3px 5px;}
+    .event-block .ev-time, .event-block .ev-acc{display:none;}
+    .routine-block-vis{font-size:8.5px;padding:3px 4px;}
+    .routine-block-vis .rb-time{display:none;}
   }
 </style>
 </head>
+
 <body>
 <div class="container">
 
@@ -268,7 +273,7 @@
     </div>
   </section>
 
-  <p class="routine-legend" id="routineLegend"><span class="swatch"></span> Blocos tracejados = compromissos da sua rotina (não vêm do Google Calendar)</p>
+  <p class="routine-legend" id="routineLegend"><span class="swatch"></span> Blocos tracejados (lado direito de cada dia) = compromissos da sua rotina · sólidos (lado esquerdo) = eventos reais do Google Calendar</p>
 
 </div>
 
