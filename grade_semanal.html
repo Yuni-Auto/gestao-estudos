@@ -163,6 +163,34 @@
   .warn-box{display:flex;gap:9px;background:#FFF1DB;border:1px solid #F3D69B;border-radius:var(--radius-sm);padding:10px 12px;font-size:11.5px;color:#8A5A0A;line-height:1.5;margin-bottom:16px;}
   .info-box{display:flex;gap:9px;background:var(--accent-soft);border:1px solid var(--accent-line);border-radius:var(--radius-sm);padding:10px 12px;font-size:11.5px;color:#2A3E9C;line-height:1.5;margin-bottom:16px;}
 
+  /* ---------- Rotina / tempo de estudo ---------- */
+  .field-group-row{display:flex;gap:12px;}
+  .field-group-row .field-group{flex:1;}
+  .routine-suggestions{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px;}
+  .suggestion-chip{font-family:var(--font-body);font-weight:600;font-size:11.5px;background:var(--accent-soft);color:var(--accent);border:1px solid var(--accent-line);border-radius:999px;padding:6px 11px;cursor:pointer;}
+  .suggestion-chip:hover{opacity:.8;}
+  .routine-block{background:var(--bg);border:1px solid var(--border);border-radius:var(--radius-md);padding:10px 12px;margin-bottom:8px;}
+  .routine-block-top{display:flex;gap:8px;align-items:center;margin-bottom:9px;}
+  .routine-block-top input[type="text"]{flex:1;font-family:var(--font-body);font-weight:600;font-size:12.5px;color:var(--ink);border:1px solid var(--border);border-radius:var(--radius-sm);padding:7px 9px;background:var(--surface);}
+  .routine-remove{background:none;border:none;color:var(--ink-faint);cursor:pointer;font-size:14px;padding:2px 4px;flex-shrink:0;}
+  .routine-remove:hover{color:var(--danger);}
+  .routine-days{display:flex;gap:4px;margin-bottom:9px;}
+  .routine-day-btn{width:30px;height:26px;border-radius:6px;border:1px solid var(--border);background:var(--surface);font-family:var(--font-mono);font-size:10px;cursor:pointer;color:var(--ink-soft);}
+  .routine-day-btn.active{background:var(--accent);color:#fff;border-color:var(--accent);}
+  .routine-times{display:flex;align-items:center;gap:8px;}
+  .routine-times input[type="time"]{font-family:var(--font-mono);font-size:12.5px;color:var(--ink);border:1px solid var(--border);border-radius:var(--radius-sm);padding:6px 8px;background:var(--surface);}
+  .routine-times span{color:var(--ink-faint);font-size:11px;}
+  #routineAddBlockBtn{width:100%;margin-top:2px;}
+
+  .study-row{display:grid;grid-template-columns:64px repeat(7,1fr);border-bottom:1px solid var(--border);background:var(--bg);}
+  .study-row-label{font-family:var(--font-mono);font-size:9.5px;color:var(--ink-faint);text-transform:uppercase;letter-spacing:.03em;padding:8px 6px;display:flex;align-items:center;line-height:1.3;}
+  .study-cell{padding:8px 6px;border-left:1px solid var(--border-soft);text-align:center;}
+  .study-pill{display:inline-block;font-family:var(--font-mono);font-size:11px;font-weight:600;border-radius:999px;padding:3px 9px;}
+  .study-pill.high{background:#E3F5EA;color:#0F7A42;}
+  .study-pill.mid{background:var(--accent-soft);color:var(--accent);}
+  .study-pill.low{background:var(--border-soft);color:var(--ink-faint);}
+  .study-cell.best .study-pill{box-shadow:0 0 0 2px #0F7A42 inset;}
+
   @media (max-width:760px){
     .grid-body, .day-header-row, .allday-row{grid-template-columns:44px repeat(7,minmax(84px,1fr));}
     .grid-scroll{overflow-x:auto;}
@@ -198,6 +226,8 @@
       </div>
     </div>
     <div class="gcal-actions">
+      <button class="btn btn-secondary" id="routineBtn">🧠 Minha rotina</button>
+      <button class="btn btn-secondary" id="gcalReconnectAllBtn" style="display:none;">↻ Reconectar tudo</button>
       <button class="btn btn-primary" id="gcalConnectBtn">＋ Adicionar conta</button>
       <button class="btn-icon" id="gcalSettingsBtn" title="Configurações da conexão">⚙</button>
     </div>
@@ -214,6 +244,9 @@
     </div>
     <div class="day-header-row" id="dayHeaderRow">
       <div class="day-header-spacer"></div>
+    </div>
+    <div class="study-row" id="studyRow" style="display:none;">
+      <div class="study-row-label">🧠 estudo<br>livre</div>
     </div>
     <div class="grid-scroll">
       <div id="gridEmptyState" class="empty-state" style="display:none;">
@@ -266,6 +299,38 @@
   </div>
 </div>
 
+<!-- ---------- Modal de rotina / tempo de estudo ---------- -->
+<div class="modal-overlay" id="routineOverlay">
+  <div class="modal-box" style="max-width:560px;">
+    <div class="modal-head">
+      <h3>Minha rotina</h3>
+      <button class="modal-close" id="routineCloseBtn">✕</button>
+    </div>
+    <p class="modal-sub">Defina sua janela de acordar/dormir e os compromissos fixos da semana (trabalho, academia, deslocamento...). A grade cruza isso com os eventos do Google Calendar e mostra, por dia, quanto tempo livre você tem pra estudar (considerando intervalos de pelo menos 30 min).</p>
+
+    <div class="field-group-row">
+      <div class="field-group">
+        <label>Acordo às</label>
+        <input type="time" id="routineWakeInput" value="07:00">
+      </div>
+      <div class="field-group">
+        <label>Durmo às</label>
+        <input type="time" id="routineSleepInput" value="23:00">
+      </div>
+    </div>
+
+    <div class="routine-suggestions" id="routineSuggestions"></div>
+
+    <div id="routineBlocksList"></div>
+    <button class="btn btn-secondary" id="routineAddBlockBtn">+ Adicionar compromisso</button>
+
+    <div class="modal-actions">
+      <button class="btn btn-secondary" id="routineCancelBtn">Cancelar</button>
+      <button class="btn btn-primary" id="routineSaveBtn">Salvar rotina</button>
+    </div>
+  </div>
+</div>
+
 <script>
 (function(){
   'use strict';
@@ -286,6 +351,8 @@
   const CFG_KEY = 'gcal_cfg';
   const META_KEY = 'gcal_accounts_meta';
   const EVENTS_CACHE_KEY = 'gcal_events_cache';
+  const ROUTINE_KEY = 'gcal_routine';
+  const MIN_STUDY_BLOCK_MIN = 30; // ignora intervalos livres menores que isso
 
   let cfg = loadConfig();
   let tokenClient = null;        // fluxo manual: adicionar / reconectar com clique
@@ -294,6 +361,10 @@
   let weekStart = mondayOf(new Date());
   let silentQueue = [];
   let pendingSilentEmail = null;
+  let reconnectQueue = [];       // fila para o botão "Reconectar tudo"
+  let currentWeekEvents = [];    // eventos (reais ou do cache) usados pro cálculo de tempo de estudo
+  let routine = loadRoutine();
+  let editingRoutineBlocks = []; // rascunho editado dentro do modal de rotina
 
   // ---------- Config / persistência ----------
   function loadConfig(){
@@ -331,6 +402,19 @@
     if(prefs){ cals.forEach(c=>{ if(Object.prototype.hasOwnProperty.call(prefs,c.id)) c.enabled = prefs[c.id]; }); }
   }
 
+  // ---------- Rotina (compromissos fixos + janela acordar/dormir) ----------
+  function loadRoutine(){
+    try{
+      const raw = localStorage.getItem(ROUTINE_KEY);
+      if(!raw) return {wake:'07:00', sleep:'23:00', blocks:[]};
+      const parsed = JSON.parse(raw);
+      return {wake: parsed.wake||'07:00', sleep: parsed.sleep||'23:00', blocks: parsed.blocks||[]};
+    }catch(e){ return {wake:'07:00', sleep:'23:00', blocks:[]}; }
+  }
+  function saveRoutineToStorage(){
+    try{ localStorage.setItem(ROUTINE_KEY, JSON.stringify(routine)); }catch(e){}
+  }
+
   // ---------- Cache de eventos (mantém a grade visível durante reconexão) ----------
   function cacheKeyFor(d){ return d.toISOString().slice(0,10); }
   function loadEventsCache(){
@@ -354,6 +438,8 @@
       if(ev.start.date && !ev.start.dateTime) placeAllDayEvent(ev);
       else placeEvent(ev);
     });
+    currentWeekEvents = cache.events;
+    renderStudyRow();
     return true;
   }
 
@@ -512,14 +598,104 @@
     if(text) document.getElementById('gridEmptyText').textContent = text;
   }
 
+  // ---------- Tempo de estudo (rotina + eventos do Google Calendar) ----------
+  function timeStrToMin(t){ const [h,m] = (t||'0:0').split(':').map(Number); return h*60+(m||0); }
+  function minToHm(min){
+    const h = Math.floor(min/60), m = Math.round(min%60);
+    if(h<=0) return m+'min';
+    if(m===0) return h+'h';
+    return h+'h'+String(m).padStart(2,'0');
+  }
+  function mergeIntervals(intervals){
+    if(intervals.length===0) return [];
+    const sorted = intervals.slice().sort((a,b)=>a[0]-b[0]);
+    const merged = [sorted[0].slice()];
+    for(let i=1;i<sorted.length;i++){
+      const last = merged[merged.length-1];
+      if(sorted[i][0] <= last[1]) last[1] = Math.max(last[1], sorted[i][1]);
+      else merged.push(sorted[i].slice());
+    }
+    return merged;
+  }
+  function freeIntervalsForDay(dayIdx){
+    const wake = timeStrToMin(routine.wake);
+    const sleep = timeStrToMin(routine.sleep);
+    if(sleep<=wake) return [];
+    const d = addDays(weekStart, dayIdx);
+
+    const busy = [];
+    currentWeekEvents.forEach(ev=>{
+      if(ev.start.date && !ev.start.dateTime) return; // ignora eventos de dia inteiro
+      const start = new Date(ev.start.dateTime), end = new Date(ev.end.dateTime);
+      if(!isSameDay(start, d)) return;
+      const s = clamp(start.getHours()*60+start.getMinutes(), wake, sleep);
+      const e = clamp(end.getHours()*60+end.getMinutes() + (end.getDate()!==start.getDate()?24*60:0), wake, sleep);
+      if(e>s) busy.push([s,e]);
+    });
+    (routine.blocks||[]).forEach(b=>{
+      if(!b.days || !b.days.includes(dayIdx)) return;
+      const s = clamp(timeStrToMin(b.start), wake, sleep);
+      const e = clamp(timeStrToMin(b.end), wake, sleep);
+      if(e>s) busy.push([s,e]);
+    });
+
+    const merged = mergeIntervals(busy);
+    const free = [];
+    let cursor = wake;
+    merged.forEach(([s,e])=>{
+      if(s>cursor) free.push([cursor,s]);
+      cursor = Math.max(cursor,e);
+    });
+    if(sleep>cursor) free.push([cursor,sleep]);
+    return free.filter(([s,e])=>(e-s)>=MIN_STUDY_BLOCK_MIN);
+  }
+  function fmtHM(min){
+    const h = String(Math.floor(min/60)).padStart(2,'0');
+    const m = String(min%60).padStart(2,'0');
+    return h+':'+m;
+  }
+  function renderStudyRow(){
+    const row = document.getElementById('studyRow');
+    const hasRoutine = routine.blocks && routine.blocks.length>0;
+    const hasEvents = currentWeekEvents.length>0;
+    if(!hasRoutine && !hasEvents){ row.style.display = 'none'; return; }
+    row.style.display = 'grid';
+
+    document.querySelectorAll('.study-cell').forEach(el=>el.remove());
+
+    const totals = [];
+    for(let i=0;i<7;i++){
+      const free = freeIntervalsForDay(i);
+      const total = free.reduce((s,[a,b])=>s+(b-a),0);
+      totals.push({i, total, free});
+    }
+    const maxTotal = Math.max(...totals.map(t=>t.total));
+
+    totals.forEach(({i,total,free})=>{
+      const cell = document.createElement('div');
+      cell.className = 'study-cell' + (total>0 && total===maxTotal ? ' best' : '');
+      const level = total>=180 ? 'high' : (total>=60 ? 'mid' : 'low');
+      const pill = document.createElement('span');
+      pill.className = 'study-pill '+level;
+      pill.textContent = total>0 ? minToHm(total) : '—';
+      if(free.length){
+        pill.title = 'Livre: ' + free.map(([s,e])=>fmtHM(s)+'–'+fmtHM(e)).join(', ');
+      }
+      cell.appendChild(pill);
+      row.appendChild(cell);
+    });
+  }
+
   // ---------- Status / contas UI ----------
   function updateStatusText(){
     const title = document.getElementById('gcalStatusTitle');
     const sub = document.getElementById('gcalStatusSub');
+    const reconnectAllBtn = document.getElementById('gcalReconnectAllBtn');
     sub.classList.remove('err');
     const pending = accounts.filter(a=>a.reconnecting);
     const broken  = accounts.filter(a=>a.needsReconnect && !a.reconnecting);
     const active  = accounts.filter(a=>!a.needsReconnect && !a.reconnecting);
+    reconnectAllBtn.style.display = broken.length>0 ? 'inline-flex' : 'none';
 
     if(accounts.length===0){
       title.textContent = 'Nenhuma conta conectada';
@@ -674,6 +850,7 @@
         persistAccountsMeta();
         renderAccounts(); renderCalendarsPanel(); loadEvents();
         btn.disabled = false; btn.textContent = '＋ Adicionar conta';
+        processReconnectQueue();
       });
     }).catch(()=>onTokenError({error:'lookup_failed'}));
   }
@@ -684,6 +861,7 @@
     sub.classList.add('err');
     const btn = document.getElementById('gcalConnectBtn');
     btn.disabled = false; btn.textContent = '＋ Adicionar conta';
+    processReconnectQueue();
   }
 
   function connect(){
@@ -700,6 +878,19 @@
     const acc = accounts.find(a=>a.email===email);
     if(acc){ acc.reconnecting = true; renderAccounts(); }
     tokenClient.requestAccessToken({prompt:'consent', hint: email});
+  }
+
+  // ---- "Reconectar tudo": encadeia as reconexões pendentes com um único clique ----
+  function reconnectAllBroken(){
+    const broken = accounts.filter(a=>a.needsReconnect);
+    if(broken.length===0) return;
+    reconnectQueue = broken.map(a=>a.email);
+    processReconnectQueue();
+  }
+  function processReconnectQueue(){
+    if(reconnectQueue.length===0) return;
+    const email = reconnectQueue.shift();
+    reconnectAccount(email);
   }
 
   function disconnectAccount(email){
@@ -777,18 +968,25 @@
     const totalEnabled = withToken.reduce((s,a)=>s+a.calendars.filter(c=>c.enabled).length,0);
 
     if(accounts.length===0){
-      if(!renderCachedEvents()){ clearEvents(); setGridEmpty(true,'Conecte seu Google Calendar para ver seus compromissos aqui.'); }
+      if(!renderCachedEvents()){
+        clearEvents(); setGridEmpty(true,'Conecte seu Google Calendar para ver seus compromissos aqui.');
+        currentWeekEvents = []; renderStudyRow();
+      }
       return;
     }
     if(withToken.length===0){
       // Ainda reconectando (ou a reconexão silenciosa falhou): mantém os últimos
       // eventos carregados na tela em vez de esvaziar a grade.
-      if(!renderCachedEvents()){ clearEvents(); setGridEmpty(true,'Reconecte suas contas para ver os compromissos aqui.'); }
+      if(!renderCachedEvents()){
+        clearEvents(); setGridEmpty(true,'Reconecte suas contas para ver os compromissos aqui.');
+        currentWeekEvents = []; renderStudyRow();
+      }
       return;
     }
     if(totalEnabled===0){
       clearEvents();
       setGridEmpty(true,'Nenhum calendário selecionado. Marque ao menos um acima.');
+      currentWeekEvents = []; renderStudyRow();
       return;
     }
 
@@ -826,7 +1024,11 @@
 
     // Salva os eventos buscados com sucesso para essa semana, para que fiquem
     // disponíveis imediatamente no próximo carregamento da página.
-    Promise.allSettled(fetches).then(()=>{ saveEventsCache(weekKey, fetchedEvents); });
+    Promise.allSettled(fetches).then(()=>{
+      saveEventsCache(weekKey, fetchedEvents);
+      currentWeekEvents = fetchedEvents;
+      renderStudyRow();
+    });
   }
 
   // ---------- Settings modal ----------
@@ -851,6 +1053,120 @@
   });
 
   document.getElementById('gcalConnectBtn').addEventListener('click', connect);
+  document.getElementById('gcalReconnectAllBtn').addEventListener('click', reconnectAllBroken);
+
+  // ---------- Modal de rotina ----------
+  const ROUTINE_SUGGESTIONS = [
+    {label:'Trabalho', days:[0,1,2,3,4], start:'09:00', end:'18:00'},
+    {label:'Faculdade / MBA', days:[1,3], start:'19:00', end:'22:00'},
+    {label:'Academia', days:[1,3,5], start:'07:00', end:'08:00'},
+    {label:'Deslocamento', days:[0,1,2,3,4], start:'08:00', end:'09:00'},
+    {label:'Almoço', days:[0,1,2,3,4,5,6], start:'12:00', end:'13:00'}
+  ];
+  function newBlockId(){ return 'b'+Date.now()+Math.random().toString(36).slice(2,6); }
+
+  function renderRoutineSuggestions(){
+    const wrap = document.getElementById('routineSuggestions');
+    wrap.innerHTML = '';
+    ROUTINE_SUGGESTIONS.forEach(s=>{
+      const chip = document.createElement('button');
+      chip.type = 'button';
+      chip.className = 'suggestion-chip';
+      chip.textContent = '+ '+s.label;
+      chip.addEventListener('click', ()=>{
+        editingRoutineBlocks.push({id:newBlockId(), label:s.label, days:s.days.slice(), start:s.start, end:s.end});
+        renderRoutineBlocksList();
+      });
+      wrap.appendChild(chip);
+    });
+  }
+
+  function renderRoutineBlocksList(){
+    const container = document.getElementById('routineBlocksList');
+    container.innerHTML = '';
+    editingRoutineBlocks.forEach(b=>{
+      const box = document.createElement('div');
+      box.className = 'routine-block';
+
+      const top = document.createElement('div');
+      top.className = 'routine-block-top';
+      const labelInput = document.createElement('input');
+      labelInput.type = 'text';
+      labelInput.placeholder = 'Nome do compromisso (ex: Trabalho)';
+      labelInput.value = b.label;
+      labelInput.addEventListener('input', ()=>{ b.label = labelInput.value; });
+      const rm = document.createElement('button');
+      rm.className = 'routine-remove';
+      rm.type = 'button';
+      rm.textContent = '✕';
+      rm.title = 'Remover';
+      rm.addEventListener('click', ()=>{
+        editingRoutineBlocks = editingRoutineBlocks.filter(x=>x.id!==b.id);
+        renderRoutineBlocksList();
+      });
+      top.appendChild(labelInput); top.appendChild(rm);
+
+      const daysRow = document.createElement('div');
+      daysRow.className = 'routine-days';
+      DOW_LABELS.forEach((lbl,idx)=>{
+        const dbtn = document.createElement('button');
+        dbtn.type = 'button';
+        dbtn.className = 'routine-day-btn'+(b.days.includes(idx)?' active':'');
+        dbtn.textContent = lbl[0];
+        dbtn.title = lbl;
+        dbtn.addEventListener('click', ()=>{
+          if(b.days.includes(idx)) b.days = b.days.filter(d=>d!==idx);
+          else b.days.push(idx);
+          dbtn.classList.toggle('active');
+        });
+        daysRow.appendChild(dbtn);
+      });
+
+      const timesRow = document.createElement('div');
+      timesRow.className = 'routine-times';
+      const startInput = document.createElement('input');
+      startInput.type = 'time'; startInput.value = b.start;
+      startInput.addEventListener('input', ()=>{ b.start = startInput.value; });
+      const sep = document.createElement('span'); sep.textContent = 'até';
+      const endInput = document.createElement('input');
+      endInput.type = 'time'; endInput.value = b.end;
+      endInput.addEventListener('input', ()=>{ b.end = endInput.value; });
+      timesRow.appendChild(startInput); timesRow.appendChild(sep); timesRow.appendChild(endInput);
+
+      box.appendChild(top); box.appendChild(daysRow); box.appendChild(timesRow);
+      container.appendChild(box);
+    });
+  }
+
+  function openRoutineModal(){
+    document.getElementById('routineWakeInput').value = routine.wake;
+    document.getElementById('routineSleepInput').value = routine.sleep;
+    editingRoutineBlocks = (routine.blocks||[]).map(b=>({id:b.id||newBlockId(), label:b.label, days:(b.days||[]).slice(), start:b.start, end:b.end}));
+    renderRoutineSuggestions();
+    renderRoutineBlocksList();
+    document.getElementById('routineOverlay').classList.add('open');
+  }
+  function closeRoutineModal(){ document.getElementById('routineOverlay').classList.remove('open'); }
+
+  document.getElementById('routineBtn').addEventListener('click', openRoutineModal);
+  document.getElementById('routineCloseBtn').addEventListener('click', closeRoutineModal);
+  document.getElementById('routineCancelBtn').addEventListener('click', closeRoutineModal);
+  document.getElementById('routineOverlay').addEventListener('click', e=>{ if(e.target.id==='routineOverlay') closeRoutineModal(); });
+  document.getElementById('routineAddBlockBtn').addEventListener('click', ()=>{
+    editingRoutineBlocks.push({id:newBlockId(), label:'', days:[], start:'09:00', end:'10:00'});
+    renderRoutineBlocksList();
+  });
+  document.getElementById('routineSaveBtn').addEventListener('click', ()=>{
+    const wake = document.getElementById('routineWakeInput').value || '07:00';
+    const sleep = document.getElementById('routineSleepInput').value || '23:00';
+    routine = {
+      wake, sleep,
+      blocks: editingRoutineBlocks.filter(b=>b.label.trim() && b.days.length>0 && b.start && b.end)
+    };
+    saveRoutineToStorage();
+    closeRoutineModal();
+    renderStudyRow();
+  });
 
   // ---------- Navegação de semana ----------
   document.getElementById('prevWeekBtn').addEventListener('click', ()=>{ weekStart = addDays(weekStart,-7); refreshWeek(); });
@@ -874,6 +1190,7 @@
   if(!hasCachedEvents){
     setGridEmpty(true, 'Conecte seu Google Calendar para ver seus compromissos aqui.');
   }
+  renderStudyRow();
   updateStatusText();
 
   if(cfg.clientId && rememberedEmails.length>0){
