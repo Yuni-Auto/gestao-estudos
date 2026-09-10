@@ -132,6 +132,17 @@
   .event-block .ev-time{font-family:var(--font-mono);font-size:10px;opacity:.85;}
   .event-block .ev-acc{font-size:9.5px;opacity:.7;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
 
+  .routine-block-vis{
+    position:absolute;left:3px;right:3px;border-radius:7px;padding:4px 7px;
+    font-size:10.5px;line-height:1.3;overflow:hidden;pointer-events:none;
+    border:1.5px dashed var(--ink-faint);color:var(--ink-soft);z-index:1;
+    background:repeating-linear-gradient(135deg, rgba(107,114,128,0.09), rgba(107,114,128,0.09) 6px, rgba(107,114,128,0.15) 6px, rgba(107,114,128,0.15) 12px);
+  }
+  .routine-block-vis .rb-title{font-weight:600;display:block;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .routine-block-vis .rb-time{font-family:var(--font-mono);font-size:9.5px;opacity:.8;display:block;}
+  .routine-legend{font-size:11px;color:var(--ink-faint);margin:10px 4px 0;display:none;align-items:center;gap:6px;}
+  .routine-legend .swatch{width:14px;height:14px;border-radius:4px;flex-shrink:0;border:1.5px dashed var(--ink-faint);background:repeating-linear-gradient(135deg, rgba(107,114,128,0.09), rgba(107,114,128,0.09) 6px, rgba(107,114,128,0.15) 6px, rgba(107,114,128,0.15) 12px);}
+
   .now-line{position:absolute;left:0;right:0;height:0;border-top:2px solid var(--danger);z-index:5;}
   .now-line::before{content:'';position:absolute;left:-4px;top:-4px;width:8px;height:8px;border-radius:50%;background:var(--danger);}
 
@@ -256,6 +267,8 @@
       <div class="grid-body" id="gridBody"></div>
     </div>
   </section>
+
+  <p class="routine-legend" id="routineLegend"><span class="swatch"></span> Blocos tracejados = compromissos da sua rotina (não vêm do Google Calendar)</p>
 
 </div>
 
@@ -530,10 +543,42 @@
         }
       }
     }
+    renderRoutineOnGrid();
   }
 
   function dayColumns(){ return Array.from(document.querySelectorAll('#gridBody .day-col')); }
   function eventColor(ev){ return EVENT_COLOR_MAP[ev.colorId] || ev._color || DEFAULT_COLOR; }
+
+  // ---------- Blocos da rotina desenhados na grade ----------
+  function renderRoutineOnGrid(){
+    document.querySelectorAll('.routine-block-vis').forEach(el=>el.remove());
+    const legend = document.getElementById('routineLegend');
+    const blocks = routine.blocks || [];
+    legend.style.display = blocks.length ? 'flex' : 'none';
+    if(blocks.length===0) return;
+
+    const cols = dayColumns();
+    blocks.forEach(b=>{
+      (b.days||[]).forEach(dayIdx=>{
+        const col = cols[dayIdx];
+        if(!col) return;
+        const s = timeStrToMin(b.start), e = timeStrToMin(b.end);
+        const startFrac = clamp(s/60, HOUR_START, HOUR_END+1);
+        const endFrac = clamp(e/60, HOUR_START, HOUR_END+1);
+        if(endFrac<=startFrac) return;
+        const top = (startFrac-HOUR_START)*ROW_H;
+        const height = Math.max(18,(endFrac-startFrac)*ROW_H-2);
+        const block = document.createElement('div');
+        block.className = 'routine-block-vis';
+        block.style.top = top+'px';
+        block.style.height = height+'px';
+        block.title = b.label+' · '+b.start+'–'+b.end+' (rotina)';
+        block.innerHTML = '<span class="rb-title">'+escapeHtml(b.label)+'</span>'+
+          (height>34 ? '<span class="rb-time">'+b.start+'–'+b.end+'</span>' : '');
+        col.appendChild(block);
+      });
+    });
+  }
 
   function placeEvent(ev){
     const start = new Date(ev.start.dateTime || ev.start.date);
@@ -1165,6 +1210,7 @@
     };
     saveRoutineToStorage();
     closeRoutineModal();
+    renderRoutineOnGrid();
     renderStudyRow();
   });
 
