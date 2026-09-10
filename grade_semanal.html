@@ -25,6 +25,7 @@
     --accent-soft:#EBEFFF;
     --accent-line:#C3CDF7;
     --danger:#C0392B;
+    --warn:#B2630A;
     --font-display:'Space Grotesk', system-ui, sans-serif;
     --font-body:'Inter', system-ui, sans-serif;
     --font-mono:'JetBrains Mono', 'SF Mono', monospace;
@@ -73,11 +74,15 @@
   .btn[disabled]{opacity:.55;cursor:not-allowed;}
 
   .accounts-row{display:flex;flex-wrap:wrap;gap:7px;}
-  .account-chip{display:flex;align-items:center;gap:7px;background:var(--bg);border:1px solid var(--border);border-radius:999px;padding:5px 6px 5px 6px;font-size:12.5px;}
+  .account-chip{display:flex;align-items:center;gap:7px;background:var(--bg);border:1px solid var(--border);border-radius:999px;padding:5px 6px;font-size:12.5px;}
+  .account-chip.connecting{opacity:.55;}
+  .account-chip.needs-reconnect{border-color:#F3D69B;background:#FFF8EC;}
   .account-avatar{width:20px;height:20px;border-radius:50%;color:#fff;font-size:10px;font-weight:700;display:flex;align-items:center;justify-content:center;text-transform:uppercase;flex-shrink:0;}
-  .account-chip .chip-email{color:var(--ink-soft);max-width:170px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .account-chip .chip-email{color:var(--ink-soft);max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
   .account-chip .chip-remove{background:none;border:none;color:var(--ink-faint);cursor:pointer;font-size:12px;line-height:1;padding:2px 4px;border-radius:50%;}
   .account-chip .chip-remove:hover{color:var(--danger);background:var(--border-soft);}
+  .chip-reconnect{background:none;border:none;color:var(--warn);font-weight:700;font-size:11px;cursor:pointer;padding:0 3px;white-space:nowrap;}
+  .chip-reconnect:hover{text-decoration:underline;}
 
   /* ---------- Calendars visibility panel ---------- */
   .calendars-panel{
@@ -235,7 +240,7 @@
     </div>
 
     <div class="info-box">
-      💡 <span>Para conectar <b>vários e-mails</b>, clique em "＋ Adicionar conta" quantas vezes precisar. O Google vai pedir para escolher/entrar com uma conta a cada clique — cada conta pode ter vários calendários próprios, e você escolhe quais aparecem na grade logo abaixo da barra de conexão.</span>
+      💡 <span>Suas contas conectadas ficam <b>lembradas neste navegador</b>. Ao reabrir a página, ela tenta reconectar sozinha, sem popup. Se o Google exigir confirmação (às vezes acontece, por política de cookies do navegador), a conta aparece com um botão "Reconectar" — um clique resolve, sem precisar reconfigurar nada.</span>
     </div>
 
     <div class="setup-steps">
@@ -271,26 +276,61 @@
   const ROW_H      = 56;
   const DOW_LABELS = ['SEG','TER','QUA','QUI','SEX','SAB','DOM'];
 
-  // Cores por evento (colorId nativo do Google) têm prioridade sobre a cor do calendário
   const EVENT_COLOR_MAP = {
     '1':'#7986CB','2':'#33B679','3':'#8E24AA','4':'#E67C73','5':'#F6BF26',
     '6':'#F4511E','7':'#039BE5','8':'#616161','9':'#3F51B5','10':'#0B8043','11':'#D50000'
   };
-  // Paleta para distinguir contas (avatar) quando o Google não fornece cor
   const ACCOUNT_PALETTE = ['#3856D6','#FF9900','#8B5CF6','#0F9D63','#E67C73','#039BE5'];
   const DEFAULT_COLOR = '#3856D6';
 
-  let cfg = loadConfig();
-  let tokenClient = null;
-  let accounts = []; // {email, token, calendars:[{id,summary,color,enabled}]}
-  let weekStart = mondayOf(new Date());
+  const CFG_KEY = 'gcal_cfg';
+  const META_KEY = 'gcal_accounts_meta';
 
+  let cfg = loadConfig();
+  let tokenClient = null;        // fluxo manual: adicionar / reconectar com clique
+  let silentTokenClient = null;  // fluxo silencioso: reconexão automática ao carregar
+  let accounts = [];             // {email, token, calendars:[{id,summary,color,enabled}], needsReconnect, reconnecting}
+  let weekStart = mondayOf(new Date());
+  let silentQueue = [];
+  let pendingSilentEmail = null;
+
+  // ---------- Config / persistência ----------
   function loadConfig(){
-    try{ const raw = localStorage.getItem('gcal_cfg'); return raw ? JSON.parse(raw) : {clientId:''}; }
+    try{ const raw = localStorage.getItem(CFG_KEY); return raw ? JSON.parse(raw) : {clientId:''}; }
     catch(e){ return {clientId:''}; }
   }
-  function saveConfig(){ try{ localStorage.setItem('gcal_cfg', JSON.stringify(cfg)); }catch(e){} }
+  function saveConfig(){ try{ localStorage.setItem(CFG_KEY, JSON.stringify(cfg)); }catch(e){} }
 
+  function loadAccountsMeta(){
+    try{ const raw = localStorage.getItem(META_KEY); return raw ? JSON.parse(raw) : {}; }
+    catch(e){ return {}; }
+  }
+  function persistAccountsMeta(){
+    const meta = {};
+    accounts.forEach(a=>{
+      if(a.calendars && a.calendars.length){
+        meta[a.email] = {};
+        a.calendars.forEach(c=>{ meta[a.email][c.id] = c.enabled; });
+      } else {
+        const prev = loadAccountsMeta();
+        if(prev[a.email]) meta[a.email] = prev[a.email];
+        else meta[a.email] = {};
+      }
+    });
+    try{ localStorage.setItem(META_KEY, JSON.stringify(meta)); }catch(e){}
+  }
+  function forgetAccountMeta(email){
+    const meta = loadAccountsMeta();
+    delete meta[email];
+    try{ localStorage.setItem(META_KEY, JSON.stringify(meta)); }catch(e){}
+  }
+  function applyStoredCalPrefs(email, cals){
+    const meta = loadAccountsMeta();
+    const prefs = meta[email];
+    if(prefs){ cals.forEach(c=>{ if(Object.prototype.hasOwnProperty.call(prefs,c.id)) c.enabled = prefs[c.id]; }); }
+  }
+
+  // ---------- Datas ----------
   function mondayOf(d){
     const date = new Date(d);
     const day = date.getDay();
@@ -380,7 +420,6 @@
   }
 
   function dayColumns(){ return Array.from(document.querySelectorAll('#gridBody .day-col')); }
-
   function eventColor(ev){ return EVENT_COLOR_MAP[ev.colorId] || ev._color || DEFAULT_COLOR; }
 
   function placeEvent(ev){
@@ -451,9 +490,19 @@
     const title = document.getElementById('gcalStatusTitle');
     const sub = document.getElementById('gcalStatusSub');
     sub.classList.remove('err');
+    const pending = accounts.filter(a=>a.reconnecting);
+    const broken  = accounts.filter(a=>a.needsReconnect && !a.reconnecting);
+    const active  = accounts.filter(a=>!a.needsReconnect && !a.reconnecting);
+
     if(accounts.length===0){
       title.textContent = 'Nenhuma conta conectada';
       sub.textContent = 'Conecte uma ou mais contas Google para ver seus compromissos aqui.';
+    } else if(pending.length>0){
+      title.textContent = 'Reconectando contas salvas…';
+      sub.textContent = pending.length+' de '+accounts.length+' ainda carregando, sem precisar de popup.';
+    } else if(broken.length>0){
+      title.textContent = active.length+' conta'+(active.length!==1?'s':'')+' ativa'+(active.length!==1?'s':'')+' · '+broken.length+' precisa'+(broken.length!==1?'m':'')+' reconectar';
+      sub.textContent = 'Clique em "Reconectar" no chip da conta pra restaurar o acesso.';
     } else {
       title.textContent = accounts.length+' conta'+(accounts.length>1?'s':'')+' conectada'+(accounts.length>1?'s':'');
       const totalCals = accounts.reduce((s,a)=>s+a.calendars.length,0);
@@ -472,20 +521,37 @@
     row.innerHTML = '';
     accounts.forEach(acc=>{
       const chip = document.createElement('div');
-      chip.className = 'account-chip';
+      chip.className = 'account-chip'
+        + (acc.needsReconnect ? ' needs-reconnect' : '')
+        + (acc.reconnecting ? ' connecting' : '');
+
       const avatar = document.createElement('span');
       avatar.className = 'account-avatar';
       avatar.style.background = accountColor(acc.email);
       avatar.textContent = (acc.email||'?').charAt(0);
+      chip.appendChild(avatar);
+
       const emailSpan = document.createElement('span');
       emailSpan.className = 'chip-email';
-      emailSpan.textContent = acc.email;
-      const rm = document.createElement('button');
-      rm.className = 'chip-remove';
-      rm.textContent = '✕';
-      rm.title = 'Desconectar '+acc.email;
-      rm.addEventListener('click', ()=>disconnectAccount(acc.email));
-      chip.appendChild(avatar); chip.appendChild(emailSpan); chip.appendChild(rm);
+      emailSpan.textContent = acc.email
+        + (acc.reconnecting ? ' · reconectando…' : (acc.needsReconnect ? ' · desconectado' : ''));
+      chip.appendChild(emailSpan);
+
+      if(!acc.reconnecting){
+        if(acc.needsReconnect){
+          const reBtn = document.createElement('button');
+          reBtn.className = 'chip-reconnect';
+          reBtn.textContent = 'Reconectar';
+          reBtn.addEventListener('click', ()=>reconnectAccount(acc.email));
+          chip.appendChild(reBtn);
+        }
+        const rm = document.createElement('button');
+        rm.className = 'chip-remove';
+        rm.textContent = '✕';
+        rm.title = 'Esquecer '+acc.email;
+        rm.addEventListener('click', ()=>disconnectAccount(acc.email));
+        chip.appendChild(rm);
+      }
       row.appendChild(chip);
     });
     updateStatusText();
@@ -494,9 +560,10 @@
   function renderCalendarsPanel(){
     const panel = document.getElementById('calendarsPanel');
     const body = document.getElementById('calendarsPanelBody');
-    if(accounts.length===0){ panel.classList.remove('show'); body.innerHTML=''; return; }
+    const withCals = accounts.filter(a=>a.calendars && a.calendars.length);
+    if(withCals.length===0){ panel.classList.remove('show'); body.innerHTML=''; return; }
     panel.classList.add('show');
-    body.innerHTML = accounts.map(acc=>{
+    body.innerHTML = withCals.map(acc=>{
       const rows = acc.calendars.map(cal=>
         '<div class="cal-toggle'+(cal.enabled?'':' off')+'" data-account="'+escapeHtml(acc.email)+'" data-cal="'+escapeHtml(cal.id)+'">'+
           '<span class="cal-dot" style="background:'+cal.color+'"></span><span>'+escapeHtml(cal.summary)+'</span></div>'
@@ -514,6 +581,7 @@
     if(!cal) return;
     cal.enabled = !cal.enabled;
     el.classList.toggle('off', !cal.enabled);
+    persistAccountsMeta();
     loadEvents();
   });
 
@@ -523,10 +591,16 @@
     if(!cfg.clientId) return false;
     if(tokenClient) return true;
     tokenClient = google.accounts.oauth2.initTokenClient({
-      client_id: cfg.clientId,
-      scope: SCOPES,
-      callback: onTokenResponse,
-      error_callback: onTokenError
+      client_id: cfg.clientId, scope: SCOPES, callback: onTokenResponse, error_callback: onTokenError
+    });
+    return true;
+  }
+  function ensureSilentTokenClient(){
+    if(!window.google || !google.accounts || !google.accounts.oauth2) return false;
+    if(!cfg.clientId) return false;
+    if(silentTokenClient) return true;
+    silentTokenClient = google.accounts.oauth2.initTokenClient({
+      client_id: cfg.clientId, scope: SCOPES, callback: onSilentTokenResponse, error_callback: onSilentTokenError
     });
     return true;
   }
@@ -535,7 +609,6 @@
     return fetch('https://www.googleapis.com/oauth2/v3/userinfo', {headers:{Authorization:'Bearer '+token}})
       .then(r=>r.ok?r.json():null).then(d=>d&&d.email).catch(()=>null);
   }
-
   function fetchCalendarListFor(token){
     return fetch('https://www.googleapis.com/calendar/v3/users/me/calendarList?minAccessRole=reader', {headers:{Authorization:'Bearer '+token}})
       .then(r=>r.ok?r.json():{items:[]})
@@ -551,13 +624,16 @@
     const existing = accounts.find(a=>a.email===email);
     if(existing){
       existing.token = token;
-      cals.forEach(c=>{ const prev = existing.calendars.find(p=>p.id===c.id); if(prev) c.enabled = prev.enabled; });
+      existing.needsReconnect = false;
+      existing.reconnecting = false;
+      cals.forEach(c=>{ const prev = existing.calendars && existing.calendars.find(p=>p.id===c.id); if(prev) c.enabled = prev.enabled; });
       existing.calendars = cals;
     } else {
-      accounts.push({email, token, calendars: cals});
+      accounts.push({email, token, calendars: cals, needsReconnect:false, reconnecting:false});
     }
   }
 
+  // ---- fluxo manual (novo / reconectar com clique) ----
   function onTokenResponse(resp){
     const btn = document.getElementById('gcalConnectBtn');
     if(resp.error){ onTokenError(resp); return; }
@@ -566,13 +642,14 @@
       const finalEmail = email || ('conta-'+(accounts.length+1));
       return fetchCalendarListFor(token).then(cals=>{
         if(cals.length===0) cals.push({id:'primary', summary:finalEmail, color:DEFAULT_COLOR, enabled:true});
+        applyStoredCalPrefs(finalEmail, cals);
         upsertAccount(finalEmail, token, cals);
+        persistAccountsMeta();
         renderAccounts(); renderCalendarsPanel(); loadEvents();
         btn.disabled = false; btn.textContent = '＋ Adicionar conta';
       });
-    }).catch(err=>onTokenError(err));
+    }).catch(()=>onTokenError({error:'lookup_failed'}));
   }
-
   function onTokenError(err){
     console.error('OAuth error', err);
     const sub = document.getElementById('gcalStatusSub');
@@ -590,26 +667,96 @@
     tokenClient.requestAccessToken({prompt: 'select_account consent'});
   }
 
+  function reconnectAccount(email){
+    if(!cfg.clientId){ openSettings(); return; }
+    if(!ensureTokenClient()){ openSettings(); return; }
+    const acc = accounts.find(a=>a.email===email);
+    if(acc){ acc.reconnecting = true; renderAccounts(); }
+    tokenClient.requestAccessToken({prompt:'consent', hint: email});
+  }
+
   function disconnectAccount(email){
     const acc = accounts.find(a=>a.email===email);
-    if(acc && window.google && google.accounts && google.accounts.oauth2){
+    if(acc && acc.token && window.google && google.accounts && google.accounts.oauth2){
       google.accounts.oauth2.revoke(acc.token, ()=>{});
     }
     accounts = accounts.filter(a=>a.email!==email);
+    forgetAccountMeta(email);
     renderAccounts(); renderCalendarsPanel(); loadEvents();
   }
 
+  // ---- fluxo silencioso (reconexão automática ao carregar) ----
+  function startSilentReconnect(emails){
+    silentQueue = emails.slice();
+    emails.forEach(email=>{
+      if(!accounts.find(a=>a.email===email)){
+        accounts.push({email, token:null, calendars:[], needsReconnect:false, reconnecting:true});
+      }
+    });
+    renderAccounts(); renderCalendarsPanel();
+    processNextSilent();
+  }
+  function processNextSilent(){
+    if(silentQueue.length===0) return;
+    const email = silentQueue.shift();
+    if(!ensureSilentTokenClient()){
+      const acc = accounts.find(a=>a.email===email);
+      if(acc){ acc.needsReconnect = true; acc.reconnecting = false; }
+      renderAccounts(); renderCalendarsPanel();
+      return;
+    }
+    pendingSilentEmail = email;
+    silentTokenClient.requestAccessToken({prompt:'', hint: email});
+  }
+  function onSilentTokenResponse(resp){
+    if(resp.error){ onSilentTokenError(resp); return; }
+    const token = resp.access_token;
+    const fallbackEmail = pendingSilentEmail;
+    fetchUserEmail(token).then(actualEmail=>{
+      const finalEmail = actualEmail || fallbackEmail;
+      return fetchCalendarListFor(token).then(cals=>{
+        applyStoredCalPrefs(finalEmail, cals);
+        if(finalEmail !== fallbackEmail){
+          accounts = accounts.filter(a=>a.email!==fallbackEmail);
+        }
+        upsertAccount(finalEmail, token, cals);
+        persistAccountsMeta();
+        renderAccounts(); renderCalendarsPanel(); loadEvents();
+        processNextSilent();
+      });
+    }).catch(()=>onSilentTokenError({error:'lookup_failed'}));
+  }
+  function onSilentTokenError(err){
+    console.warn('Reconexão silenciosa falhou para', pendingSilentEmail, err);
+    const acc = accounts.find(a=>a.email===pendingSilentEmail);
+    if(acc){ acc.needsReconnect = true; acc.reconnecting = false; }
+    renderAccounts(); renderCalendarsPanel();
+    processNextSilent();
+  }
+  function waitForGIS(cb, tries){
+    if(window.google && google.accounts && google.accounts.oauth2){ cb(); return; }
+    if(tries>80){
+      accounts.forEach(a=>{ if(a.reconnecting){ a.reconnecting=false; a.needsReconnect=true; } });
+      renderAccounts(); renderCalendarsPanel();
+      return;
+    }
+    setTimeout(()=>waitForGIS(cb, tries+1), 100);
+  }
+
+  // ---------- Eventos ----------
   function loadEvents(){
     clearEvents();
-    const totalEnabled = accounts.reduce((s,a)=>s+a.calendars.filter(c=>c.enabled).length,0);
+    const withToken = accounts.filter(a=>a.token);
+    const totalEnabled = withToken.reduce((s,a)=>s+a.calendars.filter(c=>c.enabled).length,0);
     if(accounts.length===0){ setGridEmpty(true,'Conecte seu Google Calendar para ver seus compromissos aqui.'); return; }
+    if(withToken.length===0){ setGridEmpty(true,'Reconecte suas contas para ver os compromissos aqui.'); return; }
     if(totalEnabled===0){ setGridEmpty(true,'Nenhum calendário selecionado. Marque ao menos um acima.'); return; }
     setGridEmpty(false);
 
     const timeMin = weekStart.toISOString();
     const timeMax = addDays(weekStart,7).toISOString();
 
-    accounts.forEach(acc=>{
+    withToken.forEach(acc=>{
       acc.calendars.filter(c=>c.enabled).forEach(cal=>{
         const url = 'https://www.googleapis.com/calendar/v3/calendars/'+encodeURIComponent(cal.id)+'/events'
           + '?timeMin='+encodeURIComponent(timeMin)
@@ -648,6 +795,7 @@
     cfg.clientId = val;
     saveConfig();
     tokenClient = null;
+    silentTokenClient = null;
     closeSettings();
   });
 
@@ -671,6 +819,11 @@
   renderGridSkeleton();
   setGridEmpty(true, 'Conecte seu Google Calendar para ver seus compromissos aqui.');
   updateStatusText();
+
+  const rememberedEmails = Object.keys(loadAccountsMeta());
+  if(cfg.clientId && rememberedEmails.length>0){
+    waitForGIS(()=>startSilentReconnect(rememberedEmails), 0);
+  }
 
   setTimeout(()=>{
     const now = new Date();
