@@ -285,6 +285,7 @@
 
   const CFG_KEY = 'gcal_cfg';
   const META_KEY = 'gcal_accounts_meta';
+  const EVENTS_CACHE_KEY = 'gcal_events_cache';
 
   let cfg = loadConfig();
   let tokenClient = null;        // fluxo manual: adicionar / reconectar com clique
@@ -328,6 +329,32 @@
     const meta = loadAccountsMeta();
     const prefs = meta[email];
     if(prefs){ cals.forEach(c=>{ if(Object.prototype.hasOwnProperty.call(prefs,c.id)) c.enabled = prefs[c.id]; }); }
+  }
+
+  // ---------- Cache de eventos (mantém a grade visível durante reconexão) ----------
+  function cacheKeyFor(d){ return d.toISOString().slice(0,10); }
+  function loadEventsCache(){
+    try{ const raw = localStorage.getItem(EVENTS_CACHE_KEY); return raw ? JSON.parse(raw) : null; }
+    catch(e){ return null; }
+  }
+  function saveEventsCache(weekKey, events){
+    try{ localStorage.setItem(EVENTS_CACHE_KEY, JSON.stringify({weekKey, events, cachedAt: Date.now()})); }
+    catch(e){}
+  }
+  function clearEventsCache(){
+    try{ localStorage.removeItem(EVENTS_CACHE_KEY); }catch(e){}
+  }
+  function renderCachedEvents(){
+    const cache = loadEventsCache();
+    if(!cache || !cache.events || !cache.events.length) return false;
+    if(cache.weekKey !== cacheKeyFor(weekStart)) return false;
+    clearEvents();
+    setGridEmpty(false);
+    cache.events.forEach(ev=>{
+      if(ev.start.date && !ev.start.dateTime) placeAllDayEvent(ev);
+      else placeEvent(ev);
+    });
+    return true;
   }
 
   // ---------- Datas ----------
@@ -682,6 +709,7 @@
     }
     accounts = accounts.filter(a=>a.email!==email);
     forgetAccountMeta(email);
+    if(accounts.length===0) clearEventsCache();
     renderAccounts(); renderCalendarsPanel(); loadEvents();
   }
 
@@ -745,16 +773,33 @@
 
   // ---------- Eventos ----------
   function loadEvents(){
-    clearEvents();
     const withToken = accounts.filter(a=>a.token);
     const totalEnabled = withToken.reduce((s,a)=>s+a.calendars.filter(c=>c.enabled).length,0);
-    if(accounts.length===0){ setGridEmpty(true,'Conecte seu Google Calendar para ver seus compromissos aqui.'); return; }
-    if(withToken.length===0){ setGridEmpty(true,'Reconecte suas contas para ver os compromissos aqui.'); return; }
-    if(totalEnabled===0){ setGridEmpty(true,'Nenhum calendário selecionado. Marque ao menos um acima.'); return; }
+
+    if(accounts.length===0){
+      if(!renderCachedEvents()){ clearEvents(); setGridEmpty(true,'Conecte seu Google Calendar para ver seus compromissos aqui.'); }
+      return;
+    }
+    if(withToken.length===0){
+      // Ainda reconectando (ou a reconexão silenciosa falhou): mantém os últimos
+      // eventos carregados na tela em vez de esvaziar a grade.
+      if(!renderCachedEvents()){ clearEvents(); setGridEmpty(true,'Reconecte suas contas para ver os compromissos aqui.'); }
+      return;
+    }
+    if(totalEnabled===0){
+      clearEvents();
+      setGridEmpty(true,'Nenhum calendário selecionado. Marque ao menos um acima.');
+      return;
+    }
+
+    clearEvents();
     setGridEmpty(false);
 
     const timeMin = weekStart.toISOString();
     const timeMax = addDays(weekStart,7).toISOString();
+    const weekKey = cacheKeyFor(weekStart);
+    const fetchedEvents = [];
+    const fetches = [];
 
     withToken.forEach(acc=>{
       acc.calendars.filter(c=>c.enabled).forEach(cal=>{
@@ -763,19 +808,25 @@
           + '&timeMax='+encodeURIComponent(timeMax)
           + '&singleEvents=true&orderBy=startTime&maxResults=250';
 
-        fetch(url, {headers:{Authorization:'Bearer '+acc.token}})
+        const p = fetch(url, {headers:{Authorization:'Bearer '+acc.token}})
           .then(r=>{ if(!r.ok) throw new Error('HTTP '+r.status+' em '+cal.summary); return r.json(); })
           .then(data=>{
             (data.items||[]).forEach(ev=>{
               ev._color = cal.color;
               ev._accEmail = acc.email;
+              fetchedEvents.push(ev);
               if(ev.start.date && !ev.start.dateTime) placeAllDayEvent(ev);
               else placeEvent(ev);
             });
           })
           .catch(err=>console.error('Erro ao buscar eventos:', err));
+        fetches.push(p);
       });
     });
+
+    // Salva os eventos buscados com sucesso para essa semana, para que fiquem
+    // disponíveis imediatamente no próximo carregamento da página.
+    Promise.allSettled(fetches).then(()=>{ saveEventsCache(weekKey, fetchedEvents); });
   }
 
   // ---------- Settings modal ----------
@@ -817,10 +868,14 @@
   renderWeekLabel();
   renderDayHeaders();
   renderGridSkeleton();
-  setGridEmpty(true, 'Conecte seu Google Calendar para ver seus compromissos aqui.');
-  updateStatusText();
 
   const rememberedEmails = Object.keys(loadAccountsMeta());
+  const hasCachedEvents = renderCachedEvents();
+  if(!hasCachedEvents){
+    setGridEmpty(true, 'Conecte seu Google Calendar para ver seus compromissos aqui.');
+  }
+  updateStatusText();
+
   if(cfg.clientId && rememberedEmails.length>0){
     waitForGIS(()=>startSilentReconnect(rememberedEmails), 0);
   }
