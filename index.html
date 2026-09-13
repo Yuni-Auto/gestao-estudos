@@ -316,15 +316,84 @@
   .streak-count{font-family:var(--font-mono);font-size:13px;color:var(--ink-soft);display:flex;align-items:center;gap:5px;}
   .streak-days{display:flex;justify-content:space-between;gap:8px;}
   .streak-day{display:flex;flex-direction:column;align-items:center;gap:8px;flex:1;min-width:0;}
-  .streak-box{width:100%;max-width:36px;aspect-ratio:1;border-radius:10px;border:1.5px solid var(--border-soft);background:transparent;transition:background .15s,border-color .15s;}
+  .streak-box{width:100%;max-width:36px;aspect-ratio:1;border-radius:10px;border:1.5px solid var(--border-soft);background:transparent;transition:background .15s,border-color .15s,transform .1s;cursor:pointer;}
+  .streak-box:hover{border-color:var(--accent-line);}
   .streak-box.done{background:var(--accent);border-color:var(--accent);}
+  .streak-box.done:hover{background:var(--accent);filter:brightness(1.08);}
   .streak-box.today{border-color:var(--ink);border-width:2px;}
+  .streak-box.future{cursor:not-allowed;opacity:.5;}
+  .streak-box.future:hover{border-color:var(--border-soft);}
+  .streak-box:active{transform:scale(0.92);}
   .streak-label{font-family:var(--font-mono);font-size:10.5px;text-transform:uppercase;letter-spacing:.04em;color:var(--ink-faint);}
+
+  /* ---------- Histórico de foco ---------- */
+  .fh-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow);margin-bottom:20px;padding:18px 20px 20px;}
+  .fh-head{display:flex;align-items:center;justify-content:space-between;gap:10px;flex-wrap:wrap;margin-bottom:2px;}
+  .fh-title-group{display:flex;align-items:center;gap:9px;}
+  .fh-title{font-family:var(--font-body);font-weight:600;font-size:14px;color:var(--ink);}
+  .fh-subtitle{font-size:13px;color:var(--ink-soft);margin:2px 0 16px;}
+  .fh-controls{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;margin-bottom:14px;}
+  .fh-view-toggle{display:flex;background:var(--bg);border:1px solid var(--border);border-radius:10px;padding:3px;gap:2px;}
+  .fh-view-btn{font-family:var(--font-body);font-weight:600;font-size:12.5px;color:var(--ink-soft);background:transparent;border:none;border-radius:8px;padding:6px 14px;cursor:pointer;transition:background .15s,color .15s;}
+  .fh-view-btn.active{background:var(--surface);color:var(--ink);box-shadow:0 1px 2px rgba(20,20,15,.08);}
+  .fh-add-btn{font-size:12.5px;padding:8px 14px;}
+  .fh-form-row{display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px;}
+  .fh-form-row select,.fh-form-row input{font-family:var(--font-body);font-size:13px;padding:8px 10px;border:1px solid var(--border);border-radius:8px;background:var(--surface);color:var(--ink);}
+  .fh-form-row .fh-name-input{flex:2;min-width:140px;}
+  .fh-form-row .fh-icon-select{flex:0 0 auto;width:64px;}
+  .fh-form-row .fh-minutes-input{flex:1;min-width:80px;}
+  .fh-form-row .fh-date-input{flex:1;min-width:130px;}
+
+  .fh-chart-row{display:flex;gap:8px;}
+  .fh-y-axis{position:relative;width:40px;flex-shrink:0;height:220px;}
+  .fh-ytick{position:absolute;left:0;right:6px;transform:translateY(50%);font-family:var(--font-mono);font-size:10.5px;color:var(--ink-faint);text-align:right;}
+  .fh-plot{position:relative;flex:1;min-width:0;height:220px;overflow-x:auto;}
+  .fh-gridline{position:absolute;left:0;right:0;border-top:1px dashed var(--border-soft);}
+  .fh-bars{position:relative;display:flex;align-items:flex-end;gap:6px;height:100%;min-width:100%;padding:0 2px;}
+  .fh-bar-col{flex:1;min-width:20px;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;height:100%;}
+  .fh-bar{width:100%;max-width:34px;height:100%;position:relative;border-radius:3px 3px 0 0;overflow:hidden;background:transparent;}
+  .fh-bar-seg{position:absolute;left:0;right:0;transition:height .2s ease;}
+  .fh-bar-seg.pomodoro{background:var(--accent);bottom:0;}
+  .fh-bar-seg.manual{background:var(--accent-line);}
+  .fh-bar-col:hover .fh-bar-seg{filter:brightness(0.92);}
+  .fh-bar-tip{position:absolute;bottom:calc(100% + 6px);left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;font-family:var(--font-body);font-size:11px;font-weight:500;padding:4px 8px;border-radius:6px;white-space:nowrap;opacity:0;visibility:hidden;transition:opacity .12s;pointer-events:none;z-index:20;}
+  .fh-bar-col:hover .fh-bar-tip{opacity:1;visibility:visible;}
+  .fh-x-axis{display:flex;gap:6px;margin-left:48px;margin-top:6px;}
+  .fh-xtick{flex:1;min-width:20px;text-align:center;font-family:var(--font-mono);font-size:11px;color:var(--ink-faint);line-height:1.4;}
+  .fh-xtick .fh-xtick-dow{font-size:10px;text-transform:uppercase;letter-spacing:.03em;}
+  .fh-xtick.today{color:var(--accent);font-weight:600;}
+
+  .fh-legend{display:flex;gap:18px;margin:14px 0 10px;flex-wrap:wrap;}
+  .fh-legend-item{display:flex;align-items:center;gap:7px;font-size:13px;color:var(--ink-soft);cursor:pointer;user-select:none;}
+  .fh-legend-item input{margin:0;accent-color:var(--accent);width:14px;height:14px;}
+  .fh-legend-swatch{width:11px;height:11px;border-radius:3px;flex-shrink:0;}
+  .fh-legend-swatch.pomodoro{background:var(--accent);}
+  .fh-legend-swatch.manual{background:var(--accent-line);}
+
+  .fh-entries{display:flex;flex-direction:column;}
+  .fh-entry-row{display:flex;align-items:center;gap:12px;padding:12px 0;border-top:1px solid var(--border-soft);flex-wrap:wrap;}
+  .fh-entry-date{font-family:var(--font-mono);font-size:12.5px;color:var(--ink);width:96px;flex-shrink:0;}
+  .fh-entry-date .dow{color:var(--ink-faint);margin-left:4px;}
+  .fh-entry-chips{flex:1;display:flex;gap:8px;flex-wrap:wrap;min-width:0;}
+  .fh-chip{display:inline-flex;align-items:center;gap:6px;background:var(--accent-soft);border:1px solid var(--accent-line);border-radius:999px;padding:6px 10px;font-size:12.5px;color:var(--ink);}
+  .fh-chip.pomo-chip{background:var(--bg);border-color:var(--border);}
+  .fh-chip .fh-chip-dur{font-family:var(--font-mono);color:var(--ink-soft);padding-left:6px;border-left:1px solid var(--accent-line);}
+  .fh-chip.pomo-chip .fh-chip-dur{border-left-color:var(--border);}
+  .fh-chip-del{background:none;border:none;color:var(--ink-faint);cursor:pointer;font-size:12px;line-height:1;padding:0;display:flex;}
+  .fh-chip-del:hover{color:var(--danger);}
+  .fh-entry-total{font-family:var(--font-mono);font-weight:600;font-size:13px;color:var(--ink);flex-shrink:0;margin-left:auto;}
+  .fh-empty{font-size:12.5px;color:var(--ink-faint);text-align:center;padding:18px 4px;}
 
   @media (max-width:760px){
     .pomo-row{flex-direction:column;}
     .pomo-layout{flex-direction:column;align-items:stretch;}
     .pomo-timer-col{flex:none;}
+  }
+
+  @media (max-width:640px){
+    .fh-entry-row{align-items:flex-start;}
+    .fh-entry-total{margin-left:0;width:100%;text-align:right;}
+    .fh-form-row .fh-name-input,.fh-form-row .fh-icon-select,.fh-form-row .fh-minutes-input,.fh-form-row .fh-date-input{flex:1 1 100%;}
   }
 
   @media (max-width:760px){
@@ -493,6 +562,37 @@
     <div class="streak-days" id="streakDays"></div>
   </section>
 
+  <section class="fh-card" id="fhCard">
+    <div class="fh-head">
+      <span class="fh-title-group"><span class="title-icon"><svg viewBox="0 0 24 24" fill="none"><rect x="4" y="12" width="3.4" height="8" rx="1" fill="#3856D6"/><rect x="10.3" y="7" width="3.4" height="13" rx="1" fill="#3856D6"/><rect x="16.6" y="4" width="3.4" height="16" rx="1" fill="#3856D6"/></svg></span> <span class="fh-title">Histórico de foco</span></span>
+    </div>
+    <p class="fh-subtitle">Pomodoro + horas manuais, por mês ou por semana.</p>
+
+    <div class="fh-controls">
+      <div class="fh-view-toggle" id="fhViewToggle">
+        <button type="button" class="fh-view-btn active" data-view="monthly">Mensal</button>
+        <button type="button" class="fh-view-btn" data-view="weekly">Semanal</button>
+      </div>
+      <button type="button" class="btn btn-secondary fh-add-btn" id="fhAddManualBtn">+ Tempo manual</button>
+    </div>
+
+    <div class="fh-chart-row">
+      <div class="fh-y-axis" id="fhYAxis"></div>
+      <div class="fh-plot" id="fhPlot">
+        <div id="fhGridlines"></div>
+        <div class="fh-bars" id="fhBars"></div>
+      </div>
+    </div>
+    <div class="fh-x-axis" id="fhXAxis"></div>
+
+    <div class="fh-legend">
+      <label class="fh-legend-item"><input type="checkbox" id="fhShowPomodoro" checked><span class="fh-legend-swatch pomodoro"></span>Pomodoro</label>
+      <label class="fh-legend-item"><input type="checkbox" id="fhShowManual" checked><span class="fh-legend-swatch manual"></span>Manual</label>
+    </div>
+
+    <div class="fh-entries" id="fhEntries"></div>
+  </section>
+
   <p class="routine-legend" id="routineLegend"><span class="swatch"></span> Blocos tracejados (lado direito de cada dia) = compromissos da sua rotina · sólidos (lado esquerdo) = eventos reais do Google Calendar</p>
 
 </div>
@@ -584,6 +684,36 @@
     </div>
     <div class="modal-actions">
       <button class="btn btn-primary" id="pomoSettingsDoneBtn">Concluir</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="fhModalOverlay">
+  <div class="modal-box" style="max-width:420px;">
+    <div class="modal-head">
+      <h3>Tempo manual</h3>
+      <button class="modal-close" id="fhModalCloseBtn">✕</button>
+    </div>
+    <p class="modal-sub">Registre um tempo de estudo que não passou pelo pomodoro.</p>
+    <div class="fh-form-row">
+      <select class="fh-icon-select" id="fhIconInput" title="Ícone">
+        <option value="📝">📝</option>
+        <option value="✏️">✏️</option>
+        <option value="🗣️">🗣️</option>
+        <option value="👂">👂</option>
+        <option value="📖">📖</option>
+        <option value="💻">💻</option>
+        <option value="🧮">🧮</option>
+      </select>
+      <input type="text" class="fh-name-input" id="fhNameInput" placeholder="Atividade (ex.: Inglês)" maxlength="40">
+    </div>
+    <div class="fh-form-row">
+      <input type="number" class="fh-minutes-input" id="fhMinutesInput" min="1" step="1" placeholder="Minutos" value="30">
+      <input type="date" class="fh-date-input" id="fhDateInput">
+    </div>
+    <div class="modal-actions">
+      <button class="btn btn-secondary" id="fhFormCancelBtn">Cancelar</button>
+      <button class="btn btn-primary" id="fhFormSaveBtn">Salvar</button>
     </div>
   </div>
 </div>
@@ -1006,6 +1136,20 @@
     focusDays.add(dateKey(new Date()));
     saveFocusDays();
   }
+  function toggleFocusDay(key, dayDate){
+    const today = todayISO();
+    if(dayDate > today) return; // não permite marcar dias futuros
+    if(focusDays.has(key)){
+      focusDays.delete(key);
+      if(typeof removeStreakMarkFromLog==='function') removeStreakMarkFromLog(key);
+    } else {
+      focusDays.add(key);
+      if(typeof addStreakMarkToLog==='function') addStreakMarkToLog(key);
+    }
+    saveFocusDays();
+    renderFocusStreak();
+    if(typeof renderFocusHistory==='function') renderFocusHistory();
+  }
   function sundayOf(d){
     const date = new Date(d);
     date.setDate(date.getDate() - date.getDay());
@@ -1035,14 +1179,22 @@
     wrap.innerHTML = '';
     for(let i=0;i<7;i++){
       const d = addDays(weekStartSun,i);
-      const done = focusDays.has(dateKey(d));
+      const key = dateKey(d);
+      const done = focusDays.has(key);
       const isToday = isSameDay(d, today);
+      const isFuture = d > today;
       const box = document.createElement('div');
       box.className = 'streak-day';
-      box.innerHTML = '<div class="streak-box'+(done?' done':'')+(isToday?' today':'')+'"></div><div class="streak-label">'+FOCUS_DOW_LABELS[i]+'</div>';
+      box.innerHTML = '<div class="streak-box'+(done?' done':'')+(isToday?' today':'')+(isFuture?' future':'')+'" data-date="'+key+'" title="'+(isFuture?'Dia futuro':(done?'Marcado como estudado — clique para desmarcar':'Clique para marcar que estudou'))+'"></div><div class="streak-label">'+FOCUS_DOW_LABELS[i]+'</div>';
       wrap.appendChild(box);
     }
   }
+  document.getElementById('streakDays').addEventListener('click', e=>{
+    const box = e.target.closest('.streak-box');
+    if(!box || box.classList.contains('future')) return;
+    const key = box.dataset.date;
+    toggleFocusDay(key, new Date(key+'T00:00:00'));
+  });
   function renderStudyRow(){
     const row = document.getElementById('studyRow');
     const hasRoutine = routine.blocks && routine.blocks.length>0;
@@ -1832,6 +1984,283 @@
     if(e.key==='Enter'){ e.preventDefault(); pomoFormSaveBtn.click(); }
   });
 
+  // ==================== Histórico de foco ====================
+  const FOCUS_LOG_KEY = 'gradeSemanal_focusLog_v1';
+
+  function loadFocusLog(){
+    try{ return JSON.parse(localStorage.getItem(FOCUS_LOG_KEY)) || {}; }catch(e){ return {}; }
+  }
+  function saveFocusLog(){ try{ localStorage.setItem(FOCUS_LOG_KEY, JSON.stringify(focusLog)); }catch(e){} }
+  let focusLog = loadFocusLog();
+  let fhView = 'monthly'; // 'monthly' | 'weekly'
+
+  function todayKey(){ return dateKey(new Date()); }
+  function ensureFocusDay(key){
+    if(!focusLog[key]) focusLog[key] = { pomodoro:0, manual:[] };
+    if(!Array.isArray(focusLog[key].manual)) focusLog[key].manual = [];
+    return focusLog[key];
+  }
+  function logPomodoroMinutesToday(minutes){
+    const day = ensureFocusDay(todayKey());
+    day.pomodoro = (day.pomodoro||0) + minutes;
+    saveFocusLog();
+  }
+  function addManualFocusEntry(key, name, minutes, icon, fromStreak){
+    const day = ensureFocusDay(key);
+    const entry = { id:'fh_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6), name, minutes, icon };
+    if(fromStreak) entry.fromStreak = true;
+    day.manual.push(entry);
+    saveFocusLog();
+    return entry;
+  }
+  function removeManualFocusEntry(key, id){
+    const day = focusLog[key];
+    if(!day) return;
+    const removed = (day.manual||[]).find(m=>m.id===id);
+    day.manual = (day.manual||[]).filter(m=>m.id!==id);
+    saveFocusLog();
+    if(removed && removed.fromStreak && focusDays.has(key)){
+      focusDays.delete(key);
+      saveFocusDays();
+      renderFocusStreak();
+    }
+  }
+  function addStreakMarkToLog(key){
+    // evita duplicar a marca se o dia já tiver essa entrada
+    const day = focusLog[key];
+    const already = day && (day.manual||[]).some(m=>m.fromStreak);
+    if(already) return;
+    const minutes = (typeof pomoSettings!=='undefined' && pomoSettings.work) ? pomoSettings.work : 25;
+    addManualFocusEntry(key, 'Estudei', minutes, '✅', true);
+  }
+  function removeStreakMarkFromLog(key){
+    const day = focusLog[key];
+    if(!day) return;
+    day.manual = (day.manual||[]).filter(m=>!m.fromStreak);
+    saveFocusLog();
+  }
+  function dayTotal(key){
+    const day = focusLog[key];
+    if(!day) return 0;
+    const manualMin = (day.manual||[]).reduce((s,m)=>s+(m.minutes||0),0);
+    return (day.pomodoro||0) + manualMin;
+  }
+
+  function fhNiceMax(rawMax){
+    if(rawMax<=0) return 5;
+    const steps = [5,10,15,20,30,45,60,90,120,150,180,240,300,360,480,600,720,900,1200];
+    for(const s of steps){ if(rawMax<=s) return s; }
+    return Math.ceil(rawMax/60)*60;
+  }
+  function fhFormatMin(min){
+    if(min>=60){
+      const h = min/60;
+      return (h%1===0 ? h : h.toFixed(1).replace('.',',')) + 'h';
+    }
+    return Math.round(min)+'min';
+  }
+
+  const FH_MONTH_LABELS = ['Jan','Fev','Mar','Abr','Mai','Jun','Jul','Ago','Set','Out','Nov','Dez'];
+  function buildMonthlyBuckets(){
+    const map = {};
+    Object.keys(focusLog).forEach(dayKey=>{
+      const mKey = dayKey.slice(0,7); // 'YYYY-MM'
+      if(!map[mKey]) map[mKey] = { pomodoro:0, manual:[] };
+      const day = focusLog[dayKey];
+      map[mKey].pomodoro += (day.pomodoro||0);
+      (day.manual||[]).forEach(m=>map[mKey].manual.push(Object.assign({}, m, {dateKey:dayKey})));
+    });
+    const months = [];
+    const now = new Date();
+    for(let i=11;i>=0;i--){
+      const d = new Date(now.getFullYear(), now.getMonth()-i, 1);
+      const key = d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0');
+      const data = map[key] || { pomodoro:0, manual:[] };
+      months.push({
+        key,
+        rangeStart: d,
+        label: FH_MONTH_LABELS[d.getMonth()],
+        dow: "'"+String(d.getFullYear()).slice(2),
+        isToday: i===0,
+        tooltip: FH_MONTH_LABELS[d.getMonth()]+' de '+d.getFullYear(),
+        pomodoro: data.pomodoro,
+        manual: data.manual
+      });
+    }
+    return months;
+  }
+  function buildWeeklyBuckets(){
+    const weeks = [];
+    const thisMonday = mondayOf(new Date());
+    for(let i=7;i>=0;i--){
+      const start = addDays(thisMonday,-7*i);
+      const end = addDays(start,6);
+      let pomodoro = 0; const manual = [];
+      for(let d=0; d<7; d++){
+        const key = dateKey(addDays(start,d));
+        const day = focusLog[key];
+        if(day){
+          pomodoro += (day.pomodoro||0);
+          (day.manual||[]).forEach(m=>manual.push(Object.assign({}, m, {dateKey:key})));
+        }
+      }
+      weeks.push({
+        key: dateKey(start),
+        rangeStart: start,
+        rangeEnd: end,
+        label: fmtDM(start),
+        dow: 'sem',
+        isToday: i===0,
+        tooltip: fmtDM(start)+' – '+fmtDM(end),
+        pomodoro, manual
+      });
+    }
+    return weeks;
+  }
+
+  function renderFocusHistory(){
+    const buckets = fhView==='monthly' ? buildMonthlyBuckets() : buildWeeklyBuckets();
+    const showPomo = document.getElementById('fhShowPomodoro').checked;
+    const showManual = document.getElementById('fhShowManual').checked;
+
+    let rawMax = 0;
+    buckets.forEach(b=>{
+      const manualMin = b.manual.reduce((s,m)=>s+(m.minutes||0),0);
+      const total = (showPomo?b.pomodoro:0) + (showManual?manualMin:0);
+      if(total>rawMax) rawMax = total;
+    });
+    const axisMax = fhNiceMax(rawMax);
+    const tickCount = 4;
+
+    const yAxis = document.getElementById('fhYAxis');
+    let yHtml = '';
+    for(let i=0;i<=tickCount;i++){
+      const val = Math.round(axisMax*i/tickCount);
+      yHtml += '<span class="fh-ytick" style="bottom:'+(i/tickCount*100)+'%">'+(val===0?'0':fhFormatMin(val))+'</span>';
+    }
+    yAxis.innerHTML = yHtml;
+
+    const gridWrap = document.getElementById('fhGridlines');
+    let gridHtml = '';
+    for(let i=0;i<=tickCount;i++){
+      gridHtml += '<div class="fh-gridline" style="bottom:'+(i/tickCount*100)+'%"></div>';
+    }
+    gridWrap.innerHTML = gridHtml;
+
+    const barsWrap = document.getElementById('fhBars');
+    barsWrap.innerHTML = buckets.map(b=>{
+      const manualMin = b.manual.reduce((s,m)=>s+(m.minutes||0),0);
+      const pomoMin = showPomo ? b.pomodoro : 0;
+      const manMin = showManual ? manualMin : 0;
+      const pomoPct = axisMax>0 ? Math.min(100,(pomoMin/axisMax*100)) : 0;
+      const manPct = axisMax>0 ? Math.min(100,(manMin/axisMax*100)) : 0;
+      const total = pomoMin+manMin;
+      return '<div class="fh-bar-col">'+
+        '<div class="fh-bar">'+
+          (total>0 ? '<div class="fh-bar-tip">'+fhFormatMin(total)+'</div>' : '')+
+          '<div class="fh-bar-seg pomodoro" style="height:'+pomoPct+'%"></div>'+
+          '<div class="fh-bar-seg manual" style="height:'+manPct+'%;bottom:'+pomoPct+'%"></div>'+
+        '</div>'+
+      '</div>';
+    }).join('');
+
+    const xAxis = document.getElementById('fhXAxis');
+    xAxis.innerHTML = buckets.map(b=>{
+      return '<div class="fh-xtick'+(b.isToday?' today':'')+'" title="'+escapeHtml(b.tooltip)+'">'+
+        escapeHtml(b.label)+'<div class="fh-xtick-dow">'+b.dow+'</div>'+
+      '</div>';
+    }).join('');
+
+    const entriesWrap = document.getElementById('fhEntries');
+    const withData = buckets.filter(b=>b.pomodoro>0 || b.manual.length>0).slice().reverse();
+    if(withData.length===0){
+      entriesWrap.innerHTML = '<div class="fh-empty">Nenhum registro de foco ainda.</div>';
+      return;
+    }
+    entriesWrap.innerHTML = withData.map(b=>{
+      const manualMin = b.manual.reduce((s,m)=>s+(m.minutes||0),0);
+      const total = b.pomodoro + manualMin;
+      let chips = '';
+      if(b.pomodoro>0){
+        chips += '<span class="fh-chip pomo-chip">🍅 Pomodoro<span class="fh-chip-dur">'+fhFormatMin(b.pomodoro)+'</span></span>';
+      }
+      chips += b.manual.map(m=>{
+        const prefix = m.dateKey ? fmtDM(new Date(m.dateKey+'T00:00:00'))+' · ' : '';
+        return '<span class="fh-chip" data-entry-key="'+(m.dateKey||b.key)+'" data-entry-id="'+m.id+'">'+
+          escapeHtml(m.icon||'📝')+' '+(prefix ? '<span style="opacity:.7">'+prefix+'</span>' : '')+escapeHtml(m.name)+
+          '<span class="fh-chip-dur">'+fhFormatMin(m.minutes)+'</span>'+
+          '<button type="button" class="fh-chip-del" data-action="del-entry" title="Remover">✕</button>'+
+        '</span>';
+      }).join('');
+      const dateLabel = fhView==='monthly'
+        ? b.label+' de '+b.rangeStart.getFullYear()
+        : b.label+' – '+fmtDM(b.rangeEnd);
+      return '<div class="fh-entry-row">'+
+        '<div class="fh-entry-date">'+dateLabel+'</div>'+
+        '<div class="fh-entry-chips">'+chips+'</div>'+
+        '<div class="fh-entry-total">'+fhFormatMin(total)+'</div>'+
+      '</div>';
+    }).join('');
+  }
+
+  document.getElementById('fhViewToggle').addEventListener('click', e=>{
+    const btn = e.target.closest('.fh-view-btn');
+    if(!btn) return;
+    fhView = btn.dataset.view;
+    document.querySelectorAll('.fh-view-btn').forEach(b=>b.classList.toggle('active', b===btn));
+    renderFocusHistory();
+  });
+  document.getElementById('fhShowPomodoro').addEventListener('change', renderFocusHistory);
+  document.getElementById('fhShowManual').addEventListener('change', renderFocusHistory);
+
+  document.getElementById('fhEntries').addEventListener('click', e=>{
+    const delBtn = e.target.closest('[data-action="del-entry"]');
+    if(!delBtn) return;
+    const chip = delBtn.closest('[data-entry-id]');
+    const key = chip.dataset.entryKey;
+    const id = chip.dataset.entryId;
+    removeManualFocusEntry(key, id);
+    renderFocusHistory();
+  });
+
+  const fhModalOverlay = document.getElementById('fhModalOverlay');
+  function openFhModal(){
+    document.getElementById('fhDateInput').value = todayKey();
+    fhModalOverlay.classList.add('open');
+    document.getElementById('fhNameInput').focus();
+  }
+  function closeFhModal(){
+    fhModalOverlay.classList.remove('open');
+    document.getElementById('fhNameInput').value='';
+    document.getElementById('fhMinutesInput').value='30';
+  }
+  document.getElementById('fhAddManualBtn').addEventListener('click', openFhModal);
+  document.getElementById('fhModalCloseBtn').addEventListener('click', closeFhModal);
+  document.getElementById('fhFormCancelBtn').addEventListener('click', closeFhModal);
+  fhModalOverlay.addEventListener('click', e=>{ if(e.target.id==='fhModalOverlay') closeFhModal(); });
+  document.getElementById('fhFormSaveBtn').addEventListener('click', ()=>{
+    const nameInput = document.getElementById('fhNameInput');
+    const minutesInput = document.getElementById('fhMinutesInput');
+    const dateInput = document.getElementById('fhDateInput');
+    const iconInput = document.getElementById('fhIconInput');
+    const name = nameInput.value.trim();
+    if(!name){ nameInput.focus(); return; }
+    const minutes = Math.max(1, Math.round(parseFloat((minutesInput.value||'').replace(',','.'))||30));
+    const key = dateInput.value || todayKey();
+    addManualFocusEntry(key, name, minutes, iconInput.value);
+    renderFocusHistory();
+    closeFhModal();
+  });
+  document.getElementById('fhNameInput').addEventListener('keydown', e=>{
+    if(e.key==='Enter'){ e.preventDefault(); document.getElementById('fhFormSaveBtn').click(); }
+  });
+
+  function initFocusHistory(){
+    focusLog = loadFocusLog();
+    document.getElementById('fhDateInput').value = todayKey();
+    renderFocusHistory();
+  }
+
   // ---- configurações de tempo ----
   function openPomoSettings(){
     fillPomoSettingsInputs();
@@ -1911,6 +2340,7 @@
         savePomoObjectives();
       }
       markFocusDayToday();
+      logPomodoroMinutesToday(pomoSettings.work);
       pomoCycleCount += 1;
       const isLong = pomoCycleCount % pomoSettings.cycles === 0;
       pomoMode = isLong ? 'long' : 'short';
@@ -1929,6 +2359,7 @@
     applyPomoStepTransition(true);
     renderPomoObjectives();
     renderPomoTimer();
+    if(typeof renderFocusHistory==='function') renderFocusHistory();
     savePomoState();
     pomoPause();
   }
@@ -2016,6 +2447,7 @@
   renderStudyRow();
   updateStatusText();
   initPomodoro();
+  initFocusHistory();
 
   if(cfg.clientId && rememberedEmails.length>0){
     waitForGIS(()=>startSilentReconnect(rememberedEmails), 0);
