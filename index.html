@@ -235,6 +235,17 @@
   .study-pill.low{background:var(--border-soft);color:var(--ink-faint);}
   .study-cell.best .study-pill{box-shadow:0 0 0 2px #0F7A42 inset;}
 
+  /* ---------- Seletor de cor do objetivo ---------- */
+  .pomo-form-color-row{display:flex;align-items:center;gap:10px;margin-top:8px;flex-wrap:wrap;}
+  .pomo-form-color-label{font-size:12px;color:var(--ink-soft);font-weight:600;}
+  .pomo-color-swatches{display:flex;gap:6px;}
+  .pomo-color-swatch{width:22px;height:22px;border-radius:50%;cursor:pointer;border:2px solid transparent;padding:0;transition:transform .12s ease;}
+  .pomo-color-swatch:hover{transform:scale(1.1);}
+  .pomo-color-swatch.selected{border-color:var(--ink);box-shadow:0 0 0 2px var(--surface) inset;}
+  .pomo-color-custom{width:26px;height:26px;border:1px solid var(--border);border-radius:8px;padding:0;cursor:pointer;background:none;}
+  .pomo-color-custom::-webkit-color-swatch-wrapper{padding:2px;}
+  .pomo-color-custom::-webkit-color-swatch{border-radius:6px;border:none;}
+
   /* ---------- Pomodoro por objetivo ---------- */
   .pomo-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow);margin-bottom:20px;overflow:hidden;}
   .pomo-toggle{width:100%;display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--surface);border:none;padding:14px 20px;font-family:var(--font-body);font-weight:600;font-size:14px;color:var(--ink);text-align:left;border-bottom:1px solid var(--border-soft);}
@@ -269,6 +280,7 @@
   .pomo-form input{font-family:var(--font-body);font-size:12.5px;border:1px solid var(--border);border-radius:var(--radius-sm);padding:7px 9px;background:var(--surface);color:var(--ink);}
   .pomo-form-row input[type="text"]{flex:1;min-width:0;}
   .pomo-form input[type="number"]{width:74px;font-family:var(--font-mono);flex-shrink:0;}
+  #pomoObjMinutesInput{width:100%;flex:1;}
   .pomo-form-actions{display:flex;justify-content:flex-end;gap:8px;}
 
   .pomo-obj-list{display:flex;flex-direction:column;gap:8px;}
@@ -506,6 +518,14 @@
                 <input type="text" id="pomoObjNameInput" placeholder="Nome do objetivo (ex.: Cálculo II)" maxlength="60">
                 <input type="number" id="pomoObjTargetInput" min="0.5" step="0.5" value="5" placeholder="Meta (h)" title="Meta em horas">
               </div>
+              <div class="pomo-form-row">
+                <input type="number" id="pomoObjMinutesInput" min="0" step="0.25" value="0" placeholder="Horas já registradas" title="Horas já registradas (ajuste manual)">
+              </div>
+              <div class="pomo-form-color-row">
+                <span class="pomo-form-color-label">Cor</span>
+                <div class="pomo-color-swatches" id="pomoColorSwatches"></div>
+                <input type="color" id="pomoObjColorInput" class="pomo-color-custom" title="Cor personalizada">
+              </div>
               <div class="pomo-form-actions">
                 <button type="button" class="btn btn-secondary" id="pomoFormCancelBtn">Cancelar</button>
                 <button type="button" class="btn btn-primary" id="pomoFormSaveBtn">Salvar</button>
@@ -566,12 +586,13 @@
     <div class="fh-head">
       <span class="fh-title-group"><span class="title-icon"><svg viewBox="0 0 24 24" fill="none"><rect x="4" y="12" width="3.4" height="8" rx="1" fill="#3856D6"/><rect x="10.3" y="7" width="3.4" height="13" rx="1" fill="#3856D6"/><rect x="16.6" y="4" width="3.4" height="16" rx="1" fill="#3856D6"/></svg></span> <span class="fh-title">Histórico de foco</span></span>
     </div>
-    <p class="fh-subtitle">Pomodoro + horas manuais, por mês ou por semana.</p>
+    <p class="fh-subtitle">Pomodoro + horas manuais, por mês, semana ou dia.</p>
 
     <div class="fh-controls">
       <div class="fh-view-toggle" id="fhViewToggle">
         <button type="button" class="fh-view-btn active" data-view="monthly">Mensal</button>
         <button type="button" class="fh-view-btn" data-view="weekly">Semanal</button>
+        <button type="button" class="fh-view-btn" data-view="daily">Diário</button>
       </div>
       <button type="button" class="btn btn-secondary fh-add-btn" id="fhAddManualBtn">+ Tempo manual</button>
     </div>
@@ -1923,14 +1944,40 @@
   // ---- formulário de novo objetivo / edição ----
   const pomoForm = document.getElementById('pomoForm');
   const pomoFormSaveBtn = document.getElementById('pomoFormSaveBtn');
+  const pomoColorSwatchesEl = document.getElementById('pomoColorSwatches');
+  const pomoObjColorInput = document.getElementById('pomoObjColorInput');
   let pomoEditingId = null;
+  let pomoFormSelectedColor = ACCOUNT_PALETTE[0];
+
+  function renderPomoColorSwatches(){
+    pomoColorSwatchesEl.innerHTML = ACCOUNT_PALETTE.map(c=>{
+      const sel = c.toLowerCase()===pomoFormSelectedColor.toLowerCase() ? ' selected' : '';
+      return '<button type="button" class="pomo-color-swatch'+sel+'" data-color="'+c+'" style="background:'+c+'" title="'+c+'"></button>';
+    }).join('');
+    const customIsSelected = !ACCOUNT_PALETTE.some(c=>c.toLowerCase()===pomoFormSelectedColor.toLowerCase());
+    pomoObjColorInput.value = pomoFormSelectedColor;
+    pomoObjColorInput.classList.toggle('selected', customIsSelected);
+  }
+  pomoColorSwatchesEl.addEventListener('click', e=>{
+    const btn = e.target.closest('.pomo-color-swatch');
+    if(!btn) return;
+    pomoFormSelectedColor = btn.dataset.color;
+    renderPomoColorSwatches();
+  });
+  pomoObjColorInput.addEventListener('input', ()=>{
+    pomoFormSelectedColor = pomoObjColorInput.value;
+    renderPomoColorSwatches();
+  });
 
   function closePomoObjForm(){
     pomoEditingId = null;
     pomoForm.classList.remove('show');
     document.getElementById('pomoObjNameInput').value='';
     document.getElementById('pomoObjTargetInput').value='5';
+    document.getElementById('pomoObjMinutesInput').value='0';
     pomoFormSaveBtn.textContent = 'Salvar';
+    pomoFormSelectedColor = ACCOUNT_PALETTE[0];
+    renderPomoColorSwatches();
   }
 
   function openPomoObjEditForm(id){
@@ -1939,6 +1986,9 @@
     pomoEditingId = id;
     document.getElementById('pomoObjNameInput').value = obj.name;
     document.getElementById('pomoObjTargetInput').value = obj.targetHours;
+    document.getElementById('pomoObjMinutesInput').value = Math.round(((obj.minutes||0)/60)*100)/100;
+    pomoFormSelectedColor = obj.color || pomoObjColor(obj.id);
+    renderPomoColorSwatches();
     pomoFormSaveBtn.textContent = 'Salvar alterações';
     pomoForm.classList.add('show');
     document.getElementById('pomoObjNameInput').focus();
@@ -1947,21 +1997,30 @@
 
   document.getElementById('pomoAddObjBtn').addEventListener('click', ()=>{
     if(pomoEditingId){ closePomoObjForm(); return; }
+    const opening = !pomoForm.classList.contains('show');
     pomoForm.classList.toggle('show');
-    if(pomoForm.classList.contains('show')) document.getElementById('pomoObjNameInput').focus();
+    if(opening){
+      pomoFormSelectedColor = ACCOUNT_PALETTE[Math.floor(Math.random()*ACCOUNT_PALETTE.length)];
+      renderPomoColorSwatches();
+      document.getElementById('pomoObjNameInput').focus();
+    }
   });
+  renderPomoColorSwatches();
   document.getElementById('pomoFormCancelBtn').addEventListener('click', ()=>{
     closePomoObjForm();
   });
   pomoFormSaveBtn.addEventListener('click', ()=>{
     const nameInput = document.getElementById('pomoObjNameInput');
     const targetInput = document.getElementById('pomoObjTargetInput');
+    const minutesInput = document.getElementById('pomoObjMinutesInput');
     const name = nameInput.value.trim();
     if(!name){ nameInput.focus(); return; }
     const targetHours = Math.max(0.5, parseFloat((targetInput.value||'').replace(',','.'))||5);
+    const loggedHours = Math.max(0, parseFloat((minutesInput.value||'').replace(',','.'))||0);
+    const loggedMinutes = Math.round(loggedHours*60);
     if(pomoEditingId){
       const obj = pomoObjectives.find(o=>o.id===pomoEditingId);
-      if(obj){ obj.name = name; obj.targetHours = targetHours; }
+      if(obj){ obj.name = name; obj.targetHours = targetHours; obj.color = pomoFormSelectedColor; obj.minutes = loggedMinutes; }
       savePomoObjectives();
       renderPomoObjectives();
       renderPomoTimer();
@@ -1970,14 +2029,16 @@
       return;
     }
     const id = 'obj_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
-    const obj = { id, name, targetHours, completed:0, minutes:0, color: pomoObjColor(id) };
+    const obj = { id, name, targetHours, completed:0, minutes:loggedMinutes, color: pomoFormSelectedColor };
     pomoObjectives.push(obj);
     savePomoObjectives();
     if(!pomoActiveId) pomoActiveId = id;
     renderPomoObjectives();
     renderPomoTimer();
     savePomoState();
-    nameInput.value=''; targetInput.value='5';
+    nameInput.value=''; targetInput.value='5'; minutesInput.value='0';
+    pomoFormSelectedColor = ACCOUNT_PALETTE[0];
+    renderPomoColorSwatches();
     pomoForm.classList.remove('show');
   });
   document.getElementById('pomoObjNameInput').addEventListener('keydown', e=>{
@@ -1992,7 +2053,7 @@
   }
   function saveFocusLog(){ try{ localStorage.setItem(FOCUS_LOG_KEY, JSON.stringify(focusLog)); }catch(e){} }
   let focusLog = loadFocusLog();
-  let fhView = 'monthly'; // 'monthly' | 'weekly'
+  let fhView = 'monthly'; // 'monthly' | 'weekly' | 'daily'
 
   function todayKey(){ return dateKey(new Date()); }
   function ensureFocusDay(key){
@@ -2118,8 +2179,29 @@
     return weeks;
   }
 
+  function buildDailyBuckets(){
+    const days = [];
+    const today = new Date();
+    for(let i=13;i>=0;i--){
+      const d = addDays(today,-i);
+      const key = dateKey(d);
+      const day = focusLog[key] || { pomodoro:0, manual:[] };
+      days.push({
+        key,
+        rangeStart: d,
+        label: String(d.getDate()).padStart(2,'0'),
+        dow: DOW_LABELS[(d.getDay()+6)%7],
+        isToday: i===0,
+        tooltip: fmtDM(d),
+        pomodoro: day.pomodoro||0,
+        manual: (day.manual||[]).map(m=>Object.assign({}, m, {dateKey:key}))
+      });
+    }
+    return days;
+  }
+
   function renderFocusHistory(){
-    const buckets = fhView==='monthly' ? buildMonthlyBuckets() : buildWeeklyBuckets();
+    const buckets = fhView==='monthly' ? buildMonthlyBuckets() : (fhView==='weekly' ? buildWeeklyBuckets() : buildDailyBuckets());
     const showPomo = document.getElementById('fhShowPomodoro').checked;
     const showManual = document.getElementById('fhShowManual').checked;
 
@@ -2194,7 +2276,9 @@
       }).join('');
       const dateLabel = fhView==='monthly'
         ? b.label+' de '+b.rangeStart.getFullYear()
-        : b.label+' – '+fmtDM(b.rangeEnd);
+        : fhView==='weekly'
+          ? b.label+' – '+fmtDM(b.rangeEnd)
+          : fmtDM(b.rangeStart)+' · '+b.dow;
       return '<div class="fh-entry-row">'+
         '<div class="fh-entry-date">'+dateLabel+'</div>'+
         '<div class="fh-entry-chips">'+chips+'</div>'+
