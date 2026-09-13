@@ -279,7 +279,13 @@
   .pomo-obj-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
   .pomo-obj-info{flex:1;min-width:0;}
   .pomo-obj-name{font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
-  .pomo-obj-progress{font-family:var(--font-mono);font-size:10.5px;color:var(--ink-soft);margin-top:3px;}
+  .pomo-obj-progress{font-family:var(--font-mono);font-size:10.5px;color:var(--ink-soft);margin-top:3px;display:flex;align-items:center;gap:5px;}
+  .pomo-tooltip{position:relative;display:inline-flex;align-items:center;justify-content:center;line-height:0;}
+  .pomo-tooltip-icon{width:13px;height:13px;color:var(--ink-faint);cursor:default;display:block;}
+  .pomo-tooltip:hover .pomo-tooltip-icon,.pomo-tooltip:focus .pomo-tooltip-icon{color:var(--ink-soft);}
+  .pomo-tooltip-bubble{position:absolute;bottom:calc(100% + 7px);left:50%;transform:translateX(-50%);background:var(--ink);color:#fff;font-family:var(--font-body);font-size:11px;font-weight:500;line-height:1.3;padding:5px 9px;border-radius:7px;white-space:nowrap;opacity:0;visibility:hidden;transition:opacity .15s ease,visibility .15s ease;pointer-events:none;z-index:30;box-shadow:var(--shadow);}
+  .pomo-tooltip-bubble::after{content:'';position:absolute;top:100%;left:50%;transform:translateX(-50%);border:5px solid transparent;border-top-color:var(--ink);}
+  .pomo-tooltip:hover .pomo-tooltip-bubble,.pomo-tooltip:focus .pomo-tooltip-bubble,.pomo-tooltip:focus-within .pomo-tooltip-bubble{opacity:1;visibility:visible;}
   .pomo-obj-bar{height:4px;border-radius:2px;background:var(--border-soft);margin-top:5px;overflow:hidden;}
   .pomo-obj-bar-fill{height:100%;border-radius:2px;background:var(--accent);transition:width .25s ease;}
   .pomo-obj-actions{display:flex;gap:4px;flex-shrink:0;}
@@ -1714,10 +1720,18 @@
         '<span class="pomo-obj-dot" style="background:'+o.color+'"></span>'+
         '<div class="pomo-obj-info">'+
           '<div class="pomo-obj-name">'+escapeHtml(o.name)+'</div>'+
-          '<div class="pomo-obj-progress">'+formatHoursPt(o.minutes)+' / '+formatHoursPt(targetMin)+(done?' · concluído':' · faltam '+remainingPomos+(remainingPomos===1?' pomodoro':' pomodoros'))+'</div>'+
+          '<div class="pomo-obj-progress"><span>'+formatHoursPt(o.minutes)+' / '+formatHoursPt(targetMin)+'</span>'+
+            '<span class="pomo-tooltip" tabindex="0">'+
+              '<svg class="pomo-tooltip-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.4"/><rect x="7.25" y="6.7" width="1.5" height="4.6" rx="0.75" fill="currentColor"/><rect x="7.25" y="4.3" width="1.5" height="1.5" rx="0.75" fill="currentColor"/></svg>'+
+              '<span class="pomo-tooltip-bubble">'+(done?'Concluído':'Faltam '+remainingPomos+(remainingPomos===1?' pomodoro':' pomodoros'))+'</span>'+
+            '</span>'+
+          '</div>'+
           '<div class="pomo-obj-bar"><div class="pomo-obj-bar-fill" style="width:'+pct+'%;background:'+o.color+'"></div></div>'+
         '</div>'+
         '<div class="pomo-obj-actions">'+
+          '<button type="button" class="pomo-obj-btn" data-action="edit" title="Editar objetivo">'+
+            '<svg viewBox="0 0 16 16" width="13" height="13" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M11.3 2.3a1.4 1.4 0 0 1 2 2L6.4 11.2l-2.7.7.7-2.7 6.9-6.9Z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"/></svg>'+
+          '</button>'+
           '<button type="button" class="pomo-obj-btn danger" data-action="delete" title="Remover">✕</button>'+
         '</div>'+
       '</div>';
@@ -1732,15 +1746,19 @@
   }
 
   document.getElementById('pomoObjList').addEventListener('click', e=>{
+    const editBtn = e.target.closest('[data-action="edit"]');
     const deleteBtn = e.target.closest('[data-action="delete"]');
     const item = e.target.closest('.pomo-obj-item');
     if(!item) return;
     const id = item.dataset.id;
-    if(deleteBtn){
+    if(editBtn){
+      openPomoObjEditForm(id);
+    } else if(deleteBtn){
       const obj = pomoObjectives.find(o=>o.id===id);
       if(obj && !confirm('Remover objetivo "'+obj.name+'"? O progresso será perdido.')) return;
       pomoObjectives = pomoObjectives.filter(o=>o.id!==id);
       if(pomoActiveId===id){ pomoActiveId=null; }
+      if(pomoEditingId===id) closePomoObjForm();
       savePomoObjectives();
       renderPomoObjectives();
       renderPomoTimer();
@@ -1750,23 +1768,55 @@
     }
   });
 
-  // ---- formulário de novo objetivo ----
+  // ---- formulário de novo objetivo / edição ----
   const pomoForm = document.getElementById('pomoForm');
+  const pomoFormSaveBtn = document.getElementById('pomoFormSaveBtn');
+  let pomoEditingId = null;
+
+  function closePomoObjForm(){
+    pomoEditingId = null;
+    pomoForm.classList.remove('show');
+    document.getElementById('pomoObjNameInput').value='';
+    document.getElementById('pomoObjTargetInput').value='5';
+    pomoFormSaveBtn.textContent = 'Salvar';
+  }
+
+  function openPomoObjEditForm(id){
+    const obj = pomoObjectives.find(o=>o.id===id);
+    if(!obj) return;
+    pomoEditingId = id;
+    document.getElementById('pomoObjNameInput').value = obj.name;
+    document.getElementById('pomoObjTargetInput').value = obj.targetHours;
+    pomoFormSaveBtn.textContent = 'Salvar alterações';
+    pomoForm.classList.add('show');
+    document.getElementById('pomoObjNameInput').focus();
+    pomoForm.scrollIntoView({block:'nearest', behavior:'smooth'});
+  }
+
   document.getElementById('pomoAddObjBtn').addEventListener('click', ()=>{
+    if(pomoEditingId){ closePomoObjForm(); return; }
     pomoForm.classList.toggle('show');
     if(pomoForm.classList.contains('show')) document.getElementById('pomoObjNameInput').focus();
   });
   document.getElementById('pomoFormCancelBtn').addEventListener('click', ()=>{
-    pomoForm.classList.remove('show');
-    document.getElementById('pomoObjNameInput').value='';
-    document.getElementById('pomoObjTargetInput').value='5';
+    closePomoObjForm();
   });
-  document.getElementById('pomoFormSaveBtn').addEventListener('click', ()=>{
+  pomoFormSaveBtn.addEventListener('click', ()=>{
     const nameInput = document.getElementById('pomoObjNameInput');
     const targetInput = document.getElementById('pomoObjTargetInput');
     const name = nameInput.value.trim();
     if(!name){ nameInput.focus(); return; }
     const targetHours = Math.max(0.5, parseFloat((targetInput.value||'').replace(',','.'))||5);
+    if(pomoEditingId){
+      const obj = pomoObjectives.find(o=>o.id===pomoEditingId);
+      if(obj){ obj.name = name; obj.targetHours = targetHours; }
+      savePomoObjectives();
+      renderPomoObjectives();
+      renderPomoTimer();
+      savePomoState();
+      closePomoObjForm();
+      return;
+    }
     const id = 'obj_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
     const obj = { id, name, targetHours, completed:0, minutes:0, color: pomoObjColor(id) };
     pomoObjectives.push(obj);
@@ -1779,7 +1829,7 @@
     pomoForm.classList.remove('show');
   });
   document.getElementById('pomoObjNameInput').addEventListener('keydown', e=>{
-    if(e.key==='Enter'){ e.preventDefault(); document.getElementById('pomoFormSaveBtn').click(); }
+    if(e.key==='Enter'){ e.preventDefault(); pomoFormSaveBtn.click(); }
   });
 
   // ---- configurações de tempo ----
