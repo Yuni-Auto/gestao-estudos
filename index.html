@@ -176,6 +176,8 @@
   .routine-legend{font-size:11px;color:var(--ink-faint);margin:10px 4px 0;display:none;align-items:center;gap:6px;}
   .routine-legend .swatch{width:14px;height:14px;border-radius:4px;flex-shrink:0;border:1.5px dashed var(--ink-faint);background:repeating-linear-gradient(135deg, rgba(107,114,128,0.09), rgba(107,114,128,0.09) 6px, rgba(107,114,128,0.15) 6px, rgba(107,114,128,0.15) 12px);}
 
+  .pomo-session-mark{position:absolute;right:1px;width:7px;border-radius:4px;z-index:4;cursor:default;box-shadow:0 0 0 1px rgba(255,255,255,0.6);}
+
   .now-line{position:absolute;left:0;right:0;height:0;border-top:2px solid var(--danger);z-index:5;}
   .now-line::before{content:'';position:absolute;left:-4px;top:-4px;width:8px;height:8px;border-radius:50%;background:var(--danger);}
 
@@ -941,6 +943,7 @@
       }
     }
     renderRoutineOnGrid();
+    if(typeof renderPomoSessionsOnGrid==='function') renderPomoSessionsOnGrid();
   }
 
   function dayColumns(){ return Array.from(document.querySelectorAll('#gridBody .day-col')); }
@@ -1154,8 +1157,10 @@
   function saveFocusDays(){ try{ localStorage.setItem(FOCUS_DAYS_KEY, JSON.stringify(Array.from(focusDays))); }catch(e){} }
   let focusDays = loadFocusDays();
   function markFocusDayToday(){
-    focusDays.add(dateKey(new Date()));
+    const key = dateKey(new Date());
+    focusDays.add(key);
     saveFocusDays();
+    if(typeof addStreakMarkToLog==='function') addStreakMarkToLog(key, 0);
   }
   function toggleFocusDay(key, dayDate){
     const today = todayISO();
@@ -1789,6 +1794,7 @@
   const POMO_OBJ_KEY = 'gcal_pomodoro_objectives';
   const POMO_SETTINGS_KEY = 'gcal_pomodoro_settings';
   const POMO_STATE_KEY = 'gcal_pomodoro_state';
+  const POMO_SESSIONS_KEY = 'gcal_pomodoro_sessions';
   const POMO_DEFAULT_SETTINGS = { work:25, short:5, long:15, cycles:4 };
 
   let pomoObjectives = [];
@@ -1799,6 +1805,8 @@
   let pomoRunning = false;
   let pomoCycleCount = 0;
   let pomoTimerHandle = null;
+  let pomoSessions = [];
+  let pomoSessionStart = null; // timestamp (ms) de quando o foco atual começou de fato
 
   function loadPomoObjectives(){
     try{
@@ -1829,9 +1837,59 @@
     try{
       localStorage.setItem(POMO_STATE_KEY, JSON.stringify({
         activeId: pomoActiveId, mode: pomoMode, remaining: pomoRemaining,
-        running: pomoRunning, cycleCount: pomoCycleCount, savedAt: Date.now()
+        running: pomoRunning, cycleCount: pomoCycleCount, savedAt: Date.now(),
+        sessionStart: pomoSessionStart
       }));
     }catch(e){}
+  }
+
+  function loadPomoSessions(){
+    try{ const raw = localStorage.getItem(POMO_SESSIONS_KEY); return raw? JSON.parse(raw) : []; }catch(e){ return []; }
+  }
+  function savePomoSessions(){ try{ localStorage.setItem(POMO_SESSIONS_KEY, JSON.stringify(pomoSessions)); }catch(e){} }
+  function logPomoSession(objId, startMs, endMs){
+    if(!startMs || endMs<=startMs) return;
+    const obj = pomoObjectives.find(o=>o.id===objId);
+    pomoSessions.push({
+      id: 'ps_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6),
+      objId: objId || null,
+      name: obj ? obj.name : 'Pomodoro',
+      color: obj ? obj.color : DEFAULT_COLOR,
+      start: startMs,
+      end: endMs
+    });
+    savePomoSessions();
+  }
+  function renderPomoSessionsOnGrid(){
+    document.querySelectorAll('.pomo-session-mark').forEach(el=>el.remove());
+    if(!pomoSessions.length) return;
+    const cols = dayColumns();
+    if(!cols.length) return;
+    for(let i=0;i<7;i++){
+      const d = addDays(weekStart,i);
+      const col = cols[i];
+      if(!col) continue;
+      pomoSessions.forEach(s=>{
+        const start = new Date(s.start);
+        if(!isSameDay(start,d)) return;
+        const end = new Date(s.end);
+        const startFrac = clamp(start.getHours()+start.getMinutes()/60, HOUR_START, HOUR_END+1);
+        const endFrac = clamp(end.getHours()+end.getMinutes()/60 + (end.getDate()!==start.getDate()?24:0), HOUR_START, HOUR_END+1);
+        if(endFrac<=startFrac) return;
+        const top = (startFrac-HOUR_START)*ROW_H;
+        const height = Math.max(6,(endFrac-startFrac)*ROW_H-2);
+        const liveObj = s.objId ? pomoObjectives.find(o=>o.id===s.objId) : null;
+        const color = liveObj ? liveObj.color : s.color;
+        const name = liveObj ? liveObj.name : s.name;
+        const mark = document.createElement('div');
+        mark.className = 'pomo-session-mark';
+        mark.style.top = top+'px';
+        mark.style.height = height+'px';
+        mark.style.background = color;
+        mark.title = '🍅 '+name+' · '+fmtTime(start)+' – '+fmtTime(end);
+        col.appendChild(mark);
+      });
+    }
   }
 
   function pomoObjColor(id){
@@ -2086,12 +2144,12 @@
       renderFocusStreak();
     }
   }
-  function addStreakMarkToLog(key){
+  function addStreakMarkToLog(key, minutesOverride){
     // evita duplicar a marca se o dia já tiver essa entrada
     const day = focusLog[key];
     const already = day && (day.manual||[]).some(m=>m.fromStreak);
     if(already) return;
-    const minutes = (typeof pomoSettings!=='undefined' && pomoSettings.work) ? pomoSettings.work : 25;
+    const minutes = typeof minutesOverride==='number' ? minutesOverride : ((typeof pomoSettings!=='undefined' && pomoSettings.work) ? pomoSettings.work : 25);
     addManualFocusEntry(key, 'Estudei', minutes, '✅', true);
   }
   function removeStreakMarkFromLog(key){
@@ -2270,7 +2328,7 @@
         const prefix = m.dateKey ? fmtDM(new Date(m.dateKey+'T00:00:00'))+' · ' : '';
         return '<span class="fh-chip" data-entry-key="'+(m.dateKey||b.key)+'" data-entry-id="'+m.id+'">'+
           escapeHtml(m.icon||'📝')+' '+(prefix ? '<span style="opacity:.7">'+prefix+'</span>' : '')+escapeHtml(m.name)+
-          '<span class="fh-chip-dur">'+fhFormatMin(m.minutes)+'</span>'+
+          (m.minutes>0 ? '<span class="fh-chip-dur">'+fhFormatMin(m.minutes)+'</span>' : '')+
           '<button type="button" class="fh-chip-del" data-action="del-entry" title="Remover">✕</button>'+
         '</span>';
       }).join('');
@@ -2425,6 +2483,9 @@
       }
       markFocusDayToday();
       logPomodoroMinutesToday(pomoSettings.work);
+      logPomoSession(pomoActiveId, pomoSessionStart, Date.now());
+      pomoSessionStart = null;
+      if(typeof renderPomoSessionsOnGrid==='function') renderPomoSessionsOnGrid();
       pomoCycleCount += 1;
       const isLong = pomoCycleCount % pomoSettings.cycles === 0;
       pomoMode = isLong ? 'long' : 'short';
@@ -2459,6 +2520,9 @@
       const next = pomoObjectives.find(o=>!((o.targetHours*60)>0 && o.minutes>=o.targetHours*60));
       pomoActiveId = (next || pomoObjectives[0]).id;
     }
+    if(pomoMode==='focus' && !pomoSessionStart){
+      pomoSessionStart = Date.now();
+    }
     pomoRunning = true;
     pomoStartInterval();
     renderPomoObjectives();
@@ -2474,6 +2538,7 @@
   }
   function pomoReset(){
     pomoPause();
+    if(pomoMode==='focus') pomoSessionStart = null;
     pomoRemaining = pomoModeDurationSec(pomoMode);
     renderPomoTimer();
     savePomoState();
@@ -2490,6 +2555,7 @@
   function initPomodoro(){
     pomoObjectives = loadPomoObjectives();
     pomoSettings = loadPomoSettings();
+    pomoSessions = loadPomoSessions();
     fillPomoSettingsInputs();
 
     const saved = loadPomoState();
@@ -2497,6 +2563,7 @@
       pomoActiveId = saved.activeId || null;
       pomoMode = saved.mode || 'focus';
       pomoCycleCount = saved.cycleCount || 0;
+      pomoSessionStart = saved.sessionStart || null;
       let remaining = typeof saved.remaining==='number' ? saved.remaining : pomoModeDurationSec(pomoMode);
       if(saved.running && saved.savedAt){
         remaining -= Math.floor((Date.now()-saved.savedAt)/1000);
@@ -2516,6 +2583,7 @@
 
     renderPomoObjectives();
     renderPomoTimer();
+    renderPomoSessionsOnGrid();
   }
 
   // ---------- Init ----------
