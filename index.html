@@ -280,6 +280,7 @@
   .pomo-form.show{display:flex;}
   .pomo-form-row{display:flex;gap:8px;}
   .pomo-form input{font-family:var(--font-body);font-size:12.5px;border:1px solid var(--border);border-radius:var(--radius-sm);padding:7px 9px;background:var(--surface);color:var(--ink);}
+  .pomo-form select{font-family:var(--font-body);font-size:12.5px;border:1px solid var(--border);border-radius:var(--radius-sm);padding:7px 9px;background:var(--surface);color:var(--ink);width:100%;}
   .pomo-form-row input[type="text"]{flex:1;min-width:0;}
   .pomo-form input[type="number"]{width:74px;font-family:var(--font-mono);flex-shrink:0;}
   #pomoObjMinutesInput{width:100%;flex:1;}
@@ -307,7 +308,8 @@
   .pomo-obj-item.done{opacity:.6;}
   .pomo-obj-dot{width:10px;height:10px;border-radius:50%;flex-shrink:0;}
   .pomo-obj-info{flex:1;min-width:0;}
-  .pomo-obj-name{font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;}
+  .pomo-obj-name{font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;display:flex;align-items:center;gap:6px;}
+  .pomo-obj-recur-tag{font-family:var(--font-mono);font-size:9.5px;font-weight:500;text-transform:uppercase;letter-spacing:.03em;color:var(--ink-soft);background:var(--border-soft);border-radius:5px;padding:1.5px 5px;flex-shrink:0;}
   .pomo-obj-progress{font-family:var(--font-mono);font-size:10.5px;color:var(--ink-soft);margin-top:3px;display:flex;align-items:center;gap:5px;}
   .pomo-tooltip{position:relative;display:inline-flex;align-items:center;justify-content:center;line-height:0;}
   .pomo-tooltip-icon{width:13px;height:13px;color:var(--ink-faint);cursor:default;display:block;}
@@ -533,10 +535,17 @@
             </div>
             <div class="pomo-form" id="pomoForm">
               <div class="pomo-form-row">
+                <select id="pomoObjRecurInput" title="Recorrência da meta">
+                  <option value="once">Meta única (total de horas)</option>
+                  <option value="daily">Meta diária (minutos)</option>
+                  <option value="weekly">Meta semanal (horas)</option>
+                </select>
+              </div>
+              <div class="pomo-form-row">
                 <input type="text" id="pomoObjNameInput" placeholder="Nome do objetivo (ex.: Cálculo II)" maxlength="60">
                 <input type="number" id="pomoObjTargetInput" min="0.5" step="0.5" value="5" placeholder="Meta (h)" title="Meta em horas">
               </div>
-              <div class="pomo-form-row">
+              <div class="pomo-form-row" id="pomoObjMinutesRow">
                 <input type="number" id="pomoObjMinutesInput" min="0" step="0.25" value="0" placeholder="Horas já registradas" title="Horas já registradas (ajuste manual)">
               </div>
               <div class="pomo-form-color-row">
@@ -1840,7 +1849,8 @@
       const list = raw? JSON.parse(raw):[];
       list.forEach(o=>{
         if(typeof o.minutes!=='number') o.minutes = 0;
-        if(typeof o.targetHours!=='number'){
+        if(!o.recurrence) o.recurrence = 'once';
+        if(o.recurrence==='once' && typeof o.targetHours!=='number'){
           // migração: objetivos antigos guardavam meta em nº de pomodoros
           const oldTarget = typeof o.target==='number' ? o.target : 4;
           o.targetHours = Math.round((oldTarget * POMO_DEFAULT_SETTINGS.work / 60) * 100) / 100;
@@ -1856,8 +1866,39 @@
   }
   function savePomoObjHistory(){ try{ localStorage.setItem(POMO_OBJ_HISTORY_KEY, JSON.stringify(pomoObjHistory)); }catch(e){} }
   function isObjComplete(o){
+    if(o.recurrence==='daily' || o.recurrence==='weekly') return false; // metas recorrentes nunca "concluem" de vez, elas renovam a cada período
     const targetMin = (o.targetHours||0)*60;
     return targetMin>0 && (o.minutes||0) >= targetMin;
+  }
+  function currentPeriodKey(recurrence){
+    if(recurrence==='daily') return dateKey(new Date());
+    if(recurrence==='weekly') return dateKey(mondayOf(new Date()));
+    return null;
+  }
+  // Reseta o progresso do período (dia/semana) quando ele já virou.
+  function ensureObjPeriod(o){
+    if(o.recurrence!=='daily' && o.recurrence!=='weekly') return;
+    const key = currentPeriodKey(o.recurrence);
+    if(o.periodKey!==key){
+      o.periodKey = key;
+      o.periodMinutes = 0;
+    }
+    if(typeof o.periodMinutes!=='number') o.periodMinutes = 0;
+  }
+  function objTargetMinutes(o){
+    if(o.recurrence==='daily') return o.targetMin||0;
+    return (o.targetHours||0)*60; // 'weekly' e 'once' guardam a meta em horas
+  }
+  function objProgressMinutes(o){
+    return (o.recurrence==='daily' || o.recurrence==='weekly') ? (o.periodMinutes||0) : (o.minutes||0);
+  }
+  function isPeriodDone(o){
+    if(o.recurrence!=='daily' && o.recurrence!=='weekly') return false;
+    const target = objTargetMinutes(o);
+    return target>0 && (o.periodMinutes||0)>=target;
+  }
+  function objRecurLabel(o){
+    return o.recurrence==='daily' ? 'Diária' : (o.recurrence==='weekly' ? 'Semanal' : '');
   }
   // Se o objetivo bateu a meta, move ele da lista ativa para o histórico.
   function completeObjectiveIfNeeded(obj){
@@ -2022,19 +2063,29 @@
       return;
     }
     list.innerHTML = pomoObjectives.map(o=>{
-      const targetMin = (o.targetHours||0)*60;
-      const pct = targetMin>0 ? Math.min(100, Math.round((o.minutes/targetMin)*100)) : 0;
-      const done = targetMin>0 && o.minutes>=targetMin;
-      const remainingPomos = done ? 0 : Math.ceil(Math.max(0, targetMin - o.minutes) / pomoSettings.work);
+      ensureObjPeriod(o);
+      const isRecurring = o.recurrence==='daily' || o.recurrence==='weekly';
+      const targetMin = objTargetMinutes(o);
+      const progressMin = objProgressMinutes(o);
+      const pct = targetMin>0 ? Math.min(100, Math.round((progressMin/targetMin)*100)) : 0;
+      const done = isRecurring ? isPeriodDone(o) : (targetMin>0 && o.minutes>=targetMin);
+      const remainingPomos = done ? 0 : Math.ceil(Math.max(0, targetMin - progressMin) / pomoSettings.work);
       const isActive = o.id===pomoActiveId;
+      const progressLabel = o.recurrence==='daily'
+        ? formatMinutes(progressMin)+' / '+formatMinutes(targetMin)
+        : formatHoursPt(progressMin)+' / '+formatHoursPt(targetMin);
+      const tooltipText = done
+        ? (o.recurrence==='daily' ? 'Meta de hoje batida' : (o.recurrence==='weekly' ? 'Meta da semana batida' : 'Concluído'))
+        : 'Faltam '+remainingPomos+(remainingPomos===1?' pomodoro':' pomodoros');
+      const recurTag = isRecurring ? '<span class="pomo-obj-recur-tag">'+objRecurLabel(o)+'</span>' : '';
       return '<div class="pomo-obj-item'+(isActive?' active':'')+(done?' done':'')+'" data-id="'+o.id+'" data-action="select">'+
         '<span class="pomo-obj-dot" style="background:'+o.color+'"></span>'+
         '<div class="pomo-obj-info">'+
-          '<div class="pomo-obj-name">'+escapeHtml(o.name)+'</div>'+
-          '<div class="pomo-obj-progress"><span>'+formatHoursPt(o.minutes)+' / '+formatHoursPt(targetMin)+'</span>'+
+          '<div class="pomo-obj-name">'+escapeHtml(o.name)+recurTag+'</div>'+
+          '<div class="pomo-obj-progress"><span>'+progressLabel+'</span>'+
             '<span class="pomo-tooltip" tabindex="0">'+
               '<svg class="pomo-tooltip-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.4"/><rect x="7.25" y="6.7" width="1.5" height="4.6" rx="0.75" fill="currentColor"/><rect x="7.25" y="4.3" width="1.5" height="1.5" rx="0.75" fill="currentColor"/></svg>'+
-              '<span class="pomo-tooltip-bubble">'+(done?'Concluído':'Faltam '+remainingPomos+(remainingPomos===1?' pomodoro':' pomodoros'))+'</span>'+
+              '<span class="pomo-tooltip-bubble">'+tooltipText+'</span>'+
             '</span>'+
           '</div>'+
           '<div class="pomo-obj-bar"><div class="pomo-obj-bar-fill" style="width:'+pct+'%;background:'+o.color+'"></div></div>'+
@@ -2119,8 +2170,35 @@
   const pomoFormSaveBtn = document.getElementById('pomoFormSaveBtn');
   const pomoColorSwatchesEl = document.getElementById('pomoColorSwatches');
   const pomoObjColorInput = document.getElementById('pomoObjColorInput');
+  const pomoObjRecurInput = document.getElementById('pomoObjRecurInput');
+  const pomoObjTargetInputEl = document.getElementById('pomoObjTargetInput');
+  const pomoObjMinutesRowEl = document.getElementById('pomoObjMinutesRow');
   let pomoEditingId = null;
   let pomoFormSelectedColor = ACCOUNT_PALETTE[0];
+
+  function updatePomoFormForRecurrence(keepValue){
+    const rec = pomoObjRecurInput.value;
+    if(rec==='daily'){
+      pomoObjTargetInputEl.placeholder = 'Meta diária (min)';
+      pomoObjTargetInputEl.title = 'Meta diária em minutos';
+      pomoObjTargetInputEl.step = '1'; pomoObjTargetInputEl.min = '1';
+      if(!keepValue) pomoObjTargetInputEl.value = '20';
+      pomoObjMinutesRowEl.style.display = 'none';
+    } else if(rec==='weekly'){
+      pomoObjTargetInputEl.placeholder = 'Meta semanal (h)';
+      pomoObjTargetInputEl.title = 'Meta semanal em horas';
+      pomoObjTargetInputEl.step = '0.5'; pomoObjTargetInputEl.min = '0.5';
+      if(!keepValue) pomoObjTargetInputEl.value = '3';
+      pomoObjMinutesRowEl.style.display = 'none';
+    } else {
+      pomoObjTargetInputEl.placeholder = 'Meta (h)';
+      pomoObjTargetInputEl.title = 'Meta em horas';
+      pomoObjTargetInputEl.step = '0.5'; pomoObjTargetInputEl.min = '0.5';
+      if(!keepValue) pomoObjTargetInputEl.value = '5';
+      pomoObjMinutesRowEl.style.display = '';
+    }
+  }
+  pomoObjRecurInput.addEventListener('change', ()=>updatePomoFormForRecurrence(false));
 
   function renderPomoColorSwatches(){
     pomoColorSwatchesEl.innerHTML = ACCOUNT_PALETTE.map(c=>{
@@ -2146,7 +2224,8 @@
     pomoEditingId = null;
     pomoForm.classList.remove('show');
     document.getElementById('pomoObjNameInput').value='';
-    document.getElementById('pomoObjTargetInput').value='5';
+    pomoObjRecurInput.value = 'once';
+    updatePomoFormForRecurrence(false);
     document.getElementById('pomoObjMinutesInput').value='0';
     pomoFormSaveBtn.textContent = 'Salvar';
     pomoFormSelectedColor = ACCOUNT_PALETTE[0];
@@ -2158,7 +2237,13 @@
     if(!obj) return;
     pomoEditingId = id;
     document.getElementById('pomoObjNameInput').value = obj.name;
-    document.getElementById('pomoObjTargetInput').value = obj.targetHours;
+    pomoObjRecurInput.value = obj.recurrence || 'once';
+    if(obj.recurrence==='daily'){
+      pomoObjTargetInputEl.value = obj.targetMin||20;
+    } else {
+      pomoObjTargetInputEl.value = obj.targetHours;
+    }
+    updatePomoFormForRecurrence(true);
     document.getElementById('pomoObjMinutesInput').value = Math.round(((obj.minutes||0)/60)*100)/100;
     pomoFormSelectedColor = obj.color || pomoObjColor(obj.id);
     renderPomoColorSwatches();
@@ -2173,6 +2258,8 @@
     const opening = !pomoForm.classList.contains('show');
     pomoForm.classList.toggle('show');
     if(opening){
+      pomoObjRecurInput.value = 'once';
+      updatePomoFormForRecurrence(false);
       pomoFormSelectedColor = ACCOUNT_PALETTE[Math.floor(Math.random()*ACCOUNT_PALETTE.length)];
       renderPomoColorSwatches();
       document.getElementById('pomoObjNameInput').focus();
@@ -2186,14 +2273,38 @@
     const nameInput = document.getElementById('pomoObjNameInput');
     const targetInput = document.getElementById('pomoObjTargetInput');
     const minutesInput = document.getElementById('pomoObjMinutesInput');
+    const recurrence = pomoObjRecurInput.value;
     const name = nameInput.value.trim();
     if(!name){ nameInput.focus(); return; }
-    const targetHours = Math.max(0.5, parseFloat((targetInput.value||'').replace(',','.'))||5);
-    const loggedHours = Math.max(0, parseFloat((minutesInput.value||'').replace(',','.'))||0);
-    const loggedMinutes = Math.round(loggedHours*60);
+    const rawTarget = parseFloat((targetInput.value||'').replace(',','.'))||0;
+
+    function applyTargetFields(obj){
+      if(recurrence==='daily'){
+        obj.targetMin = Math.max(1, Math.round(rawTarget||20));
+        delete obj.targetHours;
+        ensureObjPeriod(obj);
+      } else if(recurrence==='weekly'){
+        obj.targetHours = Math.max(0.5, rawTarget||3);
+        delete obj.targetMin;
+        ensureObjPeriod(obj);
+      } else {
+        obj.targetHours = Math.max(0.5, rawTarget||5);
+        delete obj.targetMin;
+        delete obj.periodKey;
+        delete obj.periodMinutes;
+        const loggedHours = Math.max(0, parseFloat((minutesInput.value||'').replace(',','.'))||0);
+        obj.minutes = Math.round(loggedHours*60);
+      }
+    }
+
     if(pomoEditingId){
       const obj = pomoObjectives.find(o=>o.id===pomoEditingId);
-      if(obj){ obj.name = name; obj.targetHours = targetHours; obj.color = pomoFormSelectedColor; obj.minutes = loggedMinutes; }
+      if(obj){
+        obj.name = name;
+        obj.color = pomoFormSelectedColor;
+        obj.recurrence = recurrence;
+        applyTargetFields(obj);
+      }
       savePomoObjectives();
       if(obj) completeObjectiveIfNeeded(obj);
       renderPomoObjectives();
@@ -2203,7 +2314,8 @@
       return;
     }
     const id = 'obj_'+Date.now().toString(36)+Math.random().toString(36).slice(2,6);
-    const obj = { id, name, targetHours, completed:0, minutes:loggedMinutes, color: pomoFormSelectedColor };
+    const obj = { id, name, completed:0, minutes:0, color: pomoFormSelectedColor, recurrence };
+    applyTargetFields(obj);
     pomoObjectives.push(obj);
     savePomoObjectives();
     if(!pomoActiveId) pomoActiveId = id;
@@ -2211,7 +2323,9 @@
     renderPomoObjectives();
     renderPomoTimer();
     savePomoState();
-    nameInput.value=''; targetInput.value='5'; minutesInput.value='0';
+    nameInput.value=''; minutesInput.value='0';
+    pomoObjRecurInput.value = 'once';
+    updatePomoFormForRecurrence(false);
     pomoFormSelectedColor = ACCOUNT_PALETTE[0];
     renderPomoColorSwatches();
     pomoForm.classList.remove('show');
@@ -2595,6 +2709,10 @@
       obj = pomoObjectives.find(o=>o.id===pomoActiveId);
       if(obj){
         obj.completed += 1;
+        ensureObjPeriod(obj);
+        if(obj.recurrence==='daily' || obj.recurrence==='weekly'){
+          obj.periodMinutes = (obj.periodMinutes||0) + pomoSettings.work;
+        }
         obj.minutes = (obj.minutes||0) + pomoSettings.work;
         savePomoObjectives();
         completeObjectiveIfNeeded(obj);
@@ -2635,7 +2753,10 @@
   }
   function pomoPlay(){
     if(pomoMode==='focus' && !pomoActiveId && pomoObjectives.length>0){
-      const next = pomoObjectives.find(o=>!((o.targetHours*60)>0 && o.minutes>=o.targetHours*60));
+      const next = pomoObjectives.find(o=>{
+        if(o.recurrence==='daily' || o.recurrence==='weekly'){ ensureObjPeriod(o); return !isPeriodDone(o); }
+        return !((o.targetHours*60)>0 && o.minutes>=o.targetHours*60);
+      });
       pomoActiveId = (next || pomoObjectives[0]).id;
     }
     if(pomoMode==='focus' && !pomoSessionStart){
