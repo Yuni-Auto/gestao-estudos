@@ -286,6 +286,21 @@
   .pomo-form-actions{display:flex;justify-content:flex-end;gap:8px;}
 
   .pomo-obj-list{display:flex;flex-direction:column;gap:8px;}
+
+  .pomo-obj-history{display:none;margin-top:14px;padding-top:12px;border-top:1px solid var(--border-soft);}
+  .pomo-obj-history.show{display:block;}
+  .pomo-history-toggle{width:100%;display:flex;align-items:center;justify-content:space-between;gap:6px;background:none;border:none;padding:2px 0;font-family:var(--font-body);font-size:12.5px;font-weight:600;color:var(--ink-soft);cursor:pointer;}
+  .pomo-history-toggle:hover{color:var(--ink);}
+  .pomo-history-toggle #pomoHistoryCount{font-family:var(--font-mono);font-weight:400;color:var(--ink-faint);}
+  .pomo-history-chevron{transition:transform .15s;flex-shrink:0;}
+  .pomo-history-toggle.open .pomo-history-chevron{transform:rotate(180deg);}
+  .pomo-history-list{display:none;flex-direction:column;gap:8px;margin-top:10px;}
+  .pomo-history-list.open{display:flex;}
+  .pomo-history-item{display:flex;align-items:center;gap:10px;background:var(--accent-soft);border:1px solid var(--border-soft);border-radius:var(--radius-md);padding:9px 12px;opacity:.85;}
+  .pomo-history-check{width:20px;height:20px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;}
+  .pomo-history-check svg{width:11px;height:11px;}
+  .pomo-history-meta{font-family:var(--font-mono);font-size:10.5px;color:var(--ink-faint);margin-top:3px;}
+  .pomo-history-item .pomo-obj-name{opacity:.85;}
   .pomo-obj-item{display:flex;align-items:center;gap:10px;background:transparent;border:1px solid var(--border-soft);border-radius:var(--radius-md);padding:9px 12px;transition:border-color .15s,background .15s;cursor:pointer;}
   .pomo-obj-item:hover{border-color:var(--accent-line);}
   .pomo-obj-item.active{border-color:var(--accent-line);background:var(--accent-soft);}
@@ -330,10 +345,11 @@
   .streak-count{font-family:var(--font-mono);font-size:13px;color:var(--ink-soft);display:flex;align-items:center;gap:5px;}
   .streak-days{display:flex;justify-content:space-between;gap:8px;}
   .streak-day{display:flex;flex-direction:column;align-items:center;gap:8px;flex:1;min-width:0;}
-  .streak-box{width:100%;max-width:36px;aspect-ratio:1;border-radius:10px;border:1.5px solid var(--border-soft);background:transparent;transition:background .15s,border-color .15s,transform .1s;cursor:pointer;}
+  .streak-box{width:100%;max-width:36px;aspect-ratio:1;border-radius:10px;border:1.5px solid var(--border-soft);background:transparent;transition:background .15s,border-color .15s,transform .1s;cursor:pointer;display:flex;align-items:center;justify-content:center;}
   .streak-box:hover{border-color:var(--accent-line);}
-  .streak-box.done{background:var(--accent);border-color:var(--accent);}
-  .streak-box.done:hover{background:var(--accent);filter:brightness(1.08);}
+  .streak-box.done{background:#e3f6ea;border-color:#bfe8cf;}
+  .streak-box.done:hover{background:#d7f1e0;}
+  .streak-box.done::after{content:'';width:55%;height:55%;background-color:#2fa860;-webkit-mask:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><polyline points='20 6 9 17 4 12'/></svg>") no-repeat center / contain;mask:url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23000' stroke-width='3' stroke-linecap='round' stroke-linejoin='round'><polyline points='20 6 9 17 4 12'/></svg>") no-repeat center / contain;}
   .streak-box.today{border-color:var(--ink);border-width:2px;}
   .streak-box.future{cursor:not-allowed;opacity:.5;}
   .streak-box.future:hover{border-color:var(--border-soft);}
@@ -534,6 +550,14 @@
               </div>
             </div>
             <div class="pomo-obj-list" id="pomoObjList"></div>
+
+            <div class="pomo-obj-history" id="pomoObjHistory">
+              <button type="button" class="pomo-history-toggle" id="pomoHistoryToggle">
+                <span>Histórico <span id="pomoHistoryCount"></span></span>
+                <svg class="pomo-history-chevron" viewBox="0 0 16 16" width="12" height="12" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
+              </button>
+              <div class="pomo-history-list" id="pomoHistoryList"></div>
+            </div>
           </div>
 
         </div>
@@ -1792,12 +1816,14 @@
 
   // ---------- Pomodoro por objetivo ----------
   const POMO_OBJ_KEY = 'gcal_pomodoro_objectives';
+  const POMO_OBJ_HISTORY_KEY = 'gcal_pomodoro_objectives_history';
   const POMO_SETTINGS_KEY = 'gcal_pomodoro_settings';
   const POMO_STATE_KEY = 'gcal_pomodoro_state';
   const POMO_SESSIONS_KEY = 'gcal_pomodoro_sessions';
   const POMO_DEFAULT_SETTINGS = { work:25, short:5, long:15, cycles:4 };
 
   let pomoObjectives = [];
+  let pomoObjHistory = [];
   let pomoSettings = Object.assign({}, POMO_DEFAULT_SETTINGS);
   let pomoActiveId = null;
   let pomoMode = 'focus'; // 'focus' | 'short' | 'long'
@@ -1825,6 +1851,28 @@
     }catch(e){ return []; }
   }
   function savePomoObjectives(){ try{ localStorage.setItem(POMO_OBJ_KEY, JSON.stringify(pomoObjectives)); }catch(e){} }
+  function loadPomoObjHistory(){
+    try{ const raw = localStorage.getItem(POMO_OBJ_HISTORY_KEY); return raw? JSON.parse(raw) : []; }catch(e){ return []; }
+  }
+  function savePomoObjHistory(){ try{ localStorage.setItem(POMO_OBJ_HISTORY_KEY, JSON.stringify(pomoObjHistory)); }catch(e){} }
+  function isObjComplete(o){
+    const targetMin = (o.targetHours||0)*60;
+    return targetMin>0 && (o.minutes||0) >= targetMin;
+  }
+  // Se o objetivo bateu a meta, move ele da lista ativa para o histórico.
+  function completeObjectiveIfNeeded(obj){
+    if(!obj || !isObjComplete(obj)) return false;
+    pomoObjectives = pomoObjectives.filter(o=>o.id!==obj.id);
+    pomoObjHistory.unshift(Object.assign({}, obj, { completedAt: Date.now() }));
+    savePomoObjectives();
+    savePomoObjHistory();
+    if(pomoActiveId===obj.id){
+      pomoActiveId = null;
+      const next = pomoObjectives.find(o=>!isObjComplete(o));
+      if(next) pomoActiveId = next.id;
+    }
+    return true;
+  }
   function loadPomoSettings(){
     try{ const raw = localStorage.getItem(POMO_SETTINGS_KEY); return raw? Object.assign({}, POMO_DEFAULT_SETTINGS, JSON.parse(raw)) : Object.assign({}, POMO_DEFAULT_SETTINGS); }
     catch(e){ return Object.assign({}, POMO_DEFAULT_SETTINGS); }
@@ -1933,10 +1981,42 @@
     document.title = (pomoRunning ? formatClock(pomoRemaining)+' · ' : '') + 'Grade Semanal';
   }
 
+  function fmtHistoryDate(ts){
+    const d = new Date(ts);
+    return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0');
+  }
+  function renderPomoObjHistory(){
+    const wrap = document.getElementById('pomoObjHistory');
+    const countEl = document.getElementById('pomoHistoryCount');
+    const list = document.getElementById('pomoHistoryList');
+    if(!wrap) return;
+    if(!pomoObjHistory.length){
+      wrap.classList.remove('show');
+      list.innerHTML = '';
+      return;
+    }
+    wrap.classList.add('show');
+    countEl.textContent = '('+pomoObjHistory.length+')';
+    list.innerHTML = pomoObjHistory.map(o=>{
+      return '<div class="pomo-history-item" data-id="'+o.id+'">'+
+        '<span class="pomo-history-check" style="background:'+(o.color||'#2fa860')+'"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>'+
+        '<div class="pomo-obj-info">'+
+          '<div class="pomo-obj-name">'+escapeHtml(o.name)+'</div>'+
+          '<div class="pomo-history-meta">'+formatHoursPt(o.minutes)+' · concluído em '+fmtHistoryDate(o.completedAt)+'</div>'+
+        '</div>'+
+        '<div class="pomo-obj-actions">'+
+          '<button type="button" class="pomo-obj-btn" data-action="restore" title="Reabrir objetivo">↺</button>'+
+          '<button type="button" class="pomo-obj-btn danger" data-action="delete" title="Remover do histórico">✕</button>'+
+        '</div>'+
+      '</div>';
+    }).join('');
+  }
+
   function renderPomoObjectives(){
     const list = document.getElementById('pomoObjList');
     renderBudget();
     renderFocusStreak();
+    renderPomoObjHistory();
     if(pomoObjectives.length===0){
       list.innerHTML = '<div class="pomo-empty">Nenhum objetivo ainda. Crie um pra começar a contar seus pomodoros.</div>';
       return;
@@ -1974,6 +2054,41 @@
     renderPomoObjectives();
     renderPomoTimer();
     savePomoState();
+  }
+
+  const pomoHistoryToggleBtn = document.getElementById('pomoHistoryToggle');
+  if(pomoHistoryToggleBtn){
+    pomoHistoryToggleBtn.addEventListener('click', ()=>{
+      pomoHistoryToggleBtn.classList.toggle('open');
+      document.getElementById('pomoHistoryList').classList.toggle('open');
+    });
+  }
+  const pomoHistoryListEl = document.getElementById('pomoHistoryList');
+  if(pomoHistoryListEl){
+    pomoHistoryListEl.addEventListener('click', e=>{
+      const item = e.target.closest('.pomo-history-item');
+      if(!item) return;
+      const id = item.dataset.id;
+      const restoreBtn = e.target.closest('[data-action="restore"]');
+      const deleteBtn = e.target.closest('[data-action="delete"]');
+      if(restoreBtn){
+        const idx = pomoObjHistory.findIndex(o=>o.id===id);
+        if(idx===-1) return;
+        const obj = pomoObjHistory.splice(idx,1)[0];
+        delete obj.completedAt;
+        pomoObjectives.push(obj);
+        savePomoObjectives();
+        savePomoObjHistory();
+        renderPomoObjectives();
+        renderPomoTimer();
+        savePomoState();
+      } else if(deleteBtn){
+        if(!confirm('Remover este objetivo do histórico? Essa ação não pode ser desfeita.')) return;
+        pomoObjHistory = pomoObjHistory.filter(o=>o.id!==id);
+        savePomoObjHistory();
+        renderPomoObjHistory();
+      }
+    });
   }
 
   document.getElementById('pomoObjList').addEventListener('click', e=>{
@@ -2080,6 +2195,7 @@
       const obj = pomoObjectives.find(o=>o.id===pomoEditingId);
       if(obj){ obj.name = name; obj.targetHours = targetHours; obj.color = pomoFormSelectedColor; obj.minutes = loggedMinutes; }
       savePomoObjectives();
+      if(obj) completeObjectiveIfNeeded(obj);
       renderPomoObjectives();
       renderPomoTimer();
       savePomoState();
@@ -2091,6 +2207,7 @@
     pomoObjectives.push(obj);
     savePomoObjectives();
     if(!pomoActiveId) pomoActiveId = id;
+    completeObjectiveIfNeeded(obj);
     renderPomoObjectives();
     renderPomoTimer();
     savePomoState();
@@ -2480,6 +2597,7 @@
         obj.completed += 1;
         obj.minutes = (obj.minutes||0) + pomoSettings.work;
         savePomoObjectives();
+        completeObjectiveIfNeeded(obj);
       }
       markFocusDayToday();
       logPomodoroMinutesToday(pomoSettings.work);
@@ -2554,6 +2672,7 @@
 
   function initPomodoro(){
     pomoObjectives = loadPomoObjectives();
+    pomoObjHistory = loadPomoObjHistory();
     pomoSettings = loadPomoSettings();
     pomoSessions = loadPomoSessions();
     fillPomoSettingsInputs();
