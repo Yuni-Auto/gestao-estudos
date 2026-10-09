@@ -327,6 +327,21 @@
 
   .pomo-empty{font-size:12.5px;color:var(--ink-faint);padding:14px 4px;text-align:center;}
 
+
+  /* ---------- Status como accordion, objetivos em grid dentro ---------- */
+  .obj-status-grid{display:flex;flex-direction:column;gap:10px;}
+  .obj-col{border:1px solid var(--border-soft);border-radius:var(--radius-md);background:var(--surface);min-width:0;}
+  .obj-col-head{width:100%;display:flex;align-items:center;gap:8px;background:none;border:none;padding:10px 12px;cursor:pointer;text-align:left;font-family:var(--font-mono);font-size:11px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-soft);}
+  .obj-col-head:hover{color:var(--ink);}
+  .obj-col-head .label{flex:1;}
+  .obj-col-head .count{color:var(--ink-faint);}
+  .obj-col-chevron{flex-shrink:0;color:var(--ink-faint);transition:transform .2s ease;transform:rotate(-90deg);}
+  .obj-col.open .obj-col-chevron{transform:rotate(0);}
+  .obj-col-body{display:grid;grid-template-rows:0fr;transition:grid-template-rows .25s ease;}
+  .obj-col.open .obj-col-body{grid-template-rows:1fr;}
+  .obj-col-inner{overflow:hidden;min-height:0;padding:0 12px;}
+  .obj-col.open .obj-col-inner{overflow:visible;padding-bottom:12px;}
+  .obj-col-list{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:8px;}
   .pomo-row{display:flex;gap:20px;align-items:flex-start;margin-bottom:20px;}
   .pomo-row .pomo-card{flex:1;min-width:0;margin-bottom:0;}
 
@@ -559,15 +574,7 @@
                 <button type="button" class="btn btn-primary" id="pomoFormSaveBtn">Salvar</button>
               </div>
             </div>
-            <div class="pomo-obj-list" id="pomoObjList"></div>
-
-            <div class="pomo-obj-history" id="pomoObjHistory">
-              <button type="button" class="pomo-history-toggle" id="pomoHistoryToggle">
-                <span>Histórico <span id="pomoHistoryCount"></span></span>
-                <svg class="pomo-history-chevron" viewBox="0 0 16 16" width="12" height="12" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>
-              </button>
-              <div class="pomo-history-list" id="pomoHistoryList"></div>
-            </div>
+            <div class="obj-status-grid" id="pomoObjList"></div>
           </div>
 
         </div>
@@ -2043,80 +2050,98 @@
     const d = new Date(ts);
     return String(d.getDate()).padStart(2,'0')+'/'+String(d.getMonth()+1).padStart(2,'0');
   }
-  function renderPomoObjHistory(){
-    const wrap = document.getElementById('pomoObjHistory');
-    const countEl = document.getElementById('pomoHistoryCount');
-    const list = document.getElementById('pomoHistoryList');
-    if(!wrap) return;
-    if(!pomoObjHistory.length){
-      wrap.classList.remove('show');
-      list.innerHTML = '';
-      return;
-    }
-    wrap.classList.add('show');
-    countEl.textContent = '('+pomoObjHistory.length+')';
-    list.innerHTML = pomoObjHistory.map(o=>{
-      return '<div class="pomo-history-item" data-id="'+o.id+'">'+
-        '<span class="pomo-history-check" style="background:'+(o.color||'#2fa860')+'"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>'+
-        '<div class="pomo-obj-info">'+
-          '<div class="pomo-obj-name">'+escapeHtml(o.name)+'</div>'+
-          '<div class="pomo-history-meta">'+formatHoursPt(o.minutes)+' · concluído em '+fmtHistoryDate(o.completedAt)+'</div>'+
+  const COL_CHEVRON = '<svg class="obj-col-chevron" viewBox="0 0 16 16" width="12" height="12" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M4 6l4 4 4-4" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  const OBJ_STATUSES = [
+    { key:'todo',  label:'A iniciar' },
+    { key:'doing', label:'Em andamento' },
+    { key:'goal',  label:'Meta batida' },
+    { key:'done',  label:'Concluído' }
+  ];
+  const objStatusOpen = new Set(['todo','doing','goal']); // accordions de status abertos (só em memória)
+
+  function objStatus(o){
+    ensureObjPeriod(o);
+    const rec = o.recurrence==='daily' || o.recurrence==='weekly';
+    if(rec && isPeriodDone(o)) return 'goal';
+    return objProgressMinutes(o)>0 ? 'doing' : 'todo';
+  }
+
+  function objActiveCardHtml(o){
+    const rec = o.recurrence==='daily' || o.recurrence==='weekly';
+    const targetMin = objTargetMinutes(o);
+    const progressMin = objProgressMinutes(o);
+    const pct = targetMin>0 ? Math.min(100, Math.round((progressMin/targetMin)*100)) : 0;
+    const done = rec ? isPeriodDone(o) : (targetMin>0 && o.minutes>=targetMin);
+    const remainingPomos = done ? 0 : Math.ceil(Math.max(0, targetMin - progressMin) / pomoSettings.work);
+    const isActive = o.id===pomoActiveId;
+    const progressLabel = o.recurrence==='daily'
+      ? formatMinutes(progressMin)+' / '+formatMinutes(targetMin)
+      : formatHoursPt(progressMin)+' / '+formatHoursPt(targetMin);
+    const tooltipText = done
+      ? (o.recurrence==='daily' ? 'Meta de hoje batida' : (o.recurrence==='weekly' ? 'Meta da semana batida' : 'Concluído'))
+      : 'Faltam '+remainingPomos+(remainingPomos===1?' pomodoro':' pomodoros');
+    const recurTag = rec ? '<span class="pomo-obj-recur-tag">'+objRecurLabel(o)+'</span>' : '';
+    return '<div class="pomo-obj-item'+(isActive?' active':'')+(done?' done':'')+'" data-id="'+o.id+'" data-action="select">'+
+      '<span class="pomo-obj-dot" style="background:'+o.color+'"></span>'+
+      '<div class="pomo-obj-info">'+
+        '<div class="pomo-obj-name">'+escapeHtml(o.name)+recurTag+'</div>'+
+        '<div class="pomo-obj-progress"><span>'+progressLabel+'</span>'+
+          '<span class="pomo-tooltip" tabindex="0">'+
+            '<svg class="pomo-tooltip-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.4"/><rect x="7.25" y="6.7" width="1.5" height="4.6" rx="0.75" fill="currentColor"/><rect x="7.25" y="4.3" width="1.5" height="1.5" rx="0.75" fill="currentColor"/></svg>'+
+            '<span class="pomo-tooltip-bubble">'+tooltipText+'</span>'+
+          '</span>'+
         '</div>'+
-        '<div class="pomo-obj-actions">'+
-          '<button type="button" class="pomo-obj-btn" data-action="restore" title="Reabrir objetivo">↺</button>'+
-          '<button type="button" class="pomo-obj-btn danger" data-action="delete" title="Remover do histórico">✕</button>'+
-        '</div>'+
-      '</div>';
-    }).join('');
+        '<div class="pomo-obj-bar"><div class="pomo-obj-bar-fill" style="width:'+pct+'%;background:'+o.color+'"></div></div>'+
+      '</div>'+
+      '<div class="pomo-obj-actions">'+
+        '<button type="button" class="pomo-obj-btn complete" data-action="complete" title="Concluir objetivo">'+
+          '<svg viewBox="0 0 16 16" width="13" height="13" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3.5 8.5l3 3 6-7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>'+
+        '</button>'+
+        '<button type="button" class="pomo-obj-btn" data-action="edit" title="Editar objetivo">'+
+          '<svg viewBox="0 0 16 16" width="13" height="13" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M11.3 2.3a1.4 1.4 0 0 1 2 2L6.4 11.2l-2.7.7.7-2.7 6.9-6.9Z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"/></svg>'+
+        '</button>'+
+        '<button type="button" class="pomo-obj-btn danger" data-action="delete" title="Remover">✕</button>'+
+      '</div>'+
+    '</div>';
+  }
+
+  function objHistoryCardHtml(o){
+    return '<div class="pomo-history-item" data-id="'+o.id+'" data-hist="1">'+
+      '<span class="pomo-history-check" style="background:'+(o.color||'#2fa860')+'"><svg viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg></span>'+
+      '<div class="pomo-obj-info">'+
+        '<div class="pomo-obj-name">'+escapeHtml(o.name)+'</div>'+
+        '<div class="pomo-history-meta">'+formatHoursPt(o.minutes)+' · concluído em '+fmtHistoryDate(o.completedAt)+'</div>'+
+      '</div>'+
+      '<div class="pomo-obj-actions">'+
+        '<button type="button" class="pomo-obj-btn" data-action="edit" title="Editar objetivo">'+
+          '<svg viewBox="0 0 16 16" width="13" height="13" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M11.3 2.3a1.4 1.4 0 0 1 2 2L6.4 11.2l-2.7.7.7-2.7 6.9-6.9Z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"/></svg>'+
+        '</button>'+
+        '<button type="button" class="pomo-obj-btn" data-action="restore" title="Reabrir objetivo">↺</button>'+
+        '<button type="button" class="pomo-obj-btn danger" data-action="delete" title="Remover do histórico">✕</button>'+
+      '</div>'+
+    '</div>';
   }
 
   function renderPomoObjectives(){
     const list = document.getElementById('pomoObjList');
     renderBudget();
     renderFocusStreak();
-    renderPomoObjHistory();
-    if(pomoObjectives.length===0){
+    if(pomoObjectives.length===0 && pomoObjHistory.length===0){
       list.innerHTML = '<div class="pomo-empty">Nenhum objetivo ainda. Crie um pra começar a contar seus pomodoros.</div>';
       return;
     }
-    list.innerHTML = pomoObjectives.map(o=>{
-      ensureObjPeriod(o);
-      const isRecurring = o.recurrence==='daily' || o.recurrence==='weekly';
-      const targetMin = objTargetMinutes(o);
-      const progressMin = objProgressMinutes(o);
-      const pct = targetMin>0 ? Math.min(100, Math.round((progressMin/targetMin)*100)) : 0;
-      const done = isRecurring ? isPeriodDone(o) : (targetMin>0 && o.minutes>=targetMin);
-      const remainingPomos = done ? 0 : Math.ceil(Math.max(0, targetMin - progressMin) / pomoSettings.work);
-      const isActive = o.id===pomoActiveId;
-      const progressLabel = o.recurrence==='daily'
-        ? formatMinutes(progressMin)+' / '+formatMinutes(targetMin)
-        : formatHoursPt(progressMin)+' / '+formatHoursPt(targetMin);
-      const tooltipText = done
-        ? (o.recurrence==='daily' ? 'Meta de hoje batida' : (o.recurrence==='weekly' ? 'Meta da semana batida' : 'Concluído'))
-        : 'Faltam '+remainingPomos+(remainingPomos===1?' pomodoro':' pomodoros');
-      const recurTag = isRecurring ? '<span class="pomo-obj-recur-tag">'+objRecurLabel(o)+'</span>' : '';
-      return '<div class="pomo-obj-item'+(isActive?' active':'')+(done?' done':'')+'" data-id="'+o.id+'" data-action="select">'+
-        '<span class="pomo-obj-dot" style="background:'+o.color+'"></span>'+
-        '<div class="pomo-obj-info">'+
-          '<div class="pomo-obj-name">'+escapeHtml(o.name)+recurTag+'</div>'+
-          '<div class="pomo-obj-progress"><span>'+progressLabel+'</span>'+
-            '<span class="pomo-tooltip" tabindex="0">'+
-              '<svg class="pomo-tooltip-icon" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg"><circle cx="8" cy="8" r="7" stroke="currentColor" stroke-width="1.4"/><rect x="7.25" y="6.7" width="1.5" height="4.6" rx="0.75" fill="currentColor"/><rect x="7.25" y="4.3" width="1.5" height="1.5" rx="0.75" fill="currentColor"/></svg>'+
-              '<span class="pomo-tooltip-bubble">'+tooltipText+'</span>'+
-            '</span>'+
-          '</div>'+
-          '<div class="pomo-obj-bar"><div class="pomo-obj-bar-fill" style="width:'+pct+'%;background:'+o.color+'"></div></div>'+
-        '</div>'+
-        '<div class="pomo-obj-actions">'+
-          '<button type="button" class="pomo-obj-btn complete" data-action="complete" title="Concluir objetivo">'+
-            '<svg viewBox="0 0 16 16" width="13" height="13" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M3.5 8.5l3 3 6-7" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round"/></svg>'+
-          '</button>'+
-          '<button type="button" class="pomo-obj-btn" data-action="edit" title="Editar objetivo">'+
-            '<svg viewBox="0 0 16 16" width="13" height="13" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M11.3 2.3a1.4 1.4 0 0 1 2 2L6.4 11.2l-2.7.7.7-2.7 6.9-6.9Z" stroke="currentColor" stroke-width="1.2" stroke-linejoin="round" stroke-linecap="round"/></svg>'+
-          '</button>'+
-          '<button type="button" class="pomo-obj-btn danger" data-action="delete" title="Remover">✕</button>'+
-        '</div>'+
-      '</div>';
+    const buckets = { todo:[], doing:[], goal:[], done:[] };
+    pomoObjectives.forEach(o=>{ buckets[objStatus(o)].push(objActiveCardHtml(o)); });
+    buckets.done = pomoObjHistory.map(objHistoryCardHtml);
+    list.innerHTML = OBJ_STATUSES.filter(st=>buckets[st.key].length).map(st=>{
+      const items = buckets[st.key];
+      const isOpen = objStatusOpen.has(st.key);
+      return '<section class="obj-col'+(isOpen?' open':'')+'" data-status="'+st.key+'">'+
+        '<button type="button" class="obj-col-head" aria-expanded="'+isOpen+'">'+
+          '<span class="label">'+st.label+'</span><span class="count">'+items.length+'</span>'+COL_CHEVRON+
+        '</button>'+
+        '<div class="obj-col-body"><div class="obj-col-inner"><div class="obj-col-list">'+items.join('')+'</div></div></div>'+
+      '</section>';
     }).join('');
   }
 
@@ -2127,22 +2152,27 @@
     savePomoState();
   }
 
-  const pomoHistoryToggleBtn = document.getElementById('pomoHistoryToggle');
-  if(pomoHistoryToggleBtn){
-    pomoHistoryToggleBtn.addEventListener('click', ()=>{
-      pomoHistoryToggleBtn.classList.toggle('open');
-      document.getElementById('pomoHistoryList').classList.toggle('open');
-    });
-  }
-  const pomoHistoryListEl = document.getElementById('pomoHistoryList');
-  if(pomoHistoryListEl){
-    pomoHistoryListEl.addEventListener('click', e=>{
-      const item = e.target.closest('.pomo-history-item');
-      if(!item) return;
-      const id = item.dataset.id;
-      const restoreBtn = e.target.closest('[data-action="restore"]');
-      const deleteBtn = e.target.closest('[data-action="delete"]');
-      if(restoreBtn){
+  document.getElementById('pomoObjList').addEventListener('click', e=>{
+    // accordion de status
+    const colHead = e.target.closest('.obj-col-head');
+    if(colHead){
+      const key = colHead.closest('.obj-col').dataset.status;
+      if(objStatusOpen.has(key)) objStatusOpen.delete(key); else objStatusOpen.add(key);
+      renderPomoObjectives();
+      return;
+    }
+    const editBtn = e.target.closest('[data-action="edit"]');
+    const deleteBtn = e.target.closest('[data-action="delete"]');
+    const completeBtn = e.target.closest('[data-action="complete"]');
+    const restoreBtn = e.target.closest('[data-action="restore"]');
+    const item = e.target.closest('.pomo-obj-item, .pomo-history-item');
+    if(!item) return;
+    const id = item.dataset.id;
+    // itens da coluna "Concluído" (histórico)
+    if(item.dataset.hist){
+      if(editBtn){
+        openPomoObjEditForm(id);
+      } else if(restoreBtn){
         const idx = pomoObjHistory.findIndex(o=>o.id===id);
         if(idx===-1) return;
         const obj = pomoObjHistory.splice(idx,1)[0];
@@ -2157,18 +2187,10 @@
         if(!confirm('Remover este objetivo do histórico? Essa ação não pode ser desfeita.')) return;
         pomoObjHistory = pomoObjHistory.filter(o=>o.id!==id);
         savePomoObjHistory();
-        renderPomoObjHistory();
+        renderPomoObjectives();
       }
-    });
-  }
-
-  document.getElementById('pomoObjList').addEventListener('click', e=>{
-    const editBtn = e.target.closest('[data-action="edit"]');
-    const deleteBtn = e.target.closest('[data-action="delete"]');
-    const completeBtn = e.target.closest('[data-action="complete"]');
-    const item = e.target.closest('.pomo-obj-item');
-    if(!item) return;
-    const id = item.dataset.id;
+      return;
+    }
     if(completeBtn){
       if(pomoEditingId===id) closePomoObjForm();
       completeObjectiveManually(id);
@@ -2257,7 +2279,7 @@
   }
 
   function openPomoObjEditForm(id){
-    const obj = pomoObjectives.find(o=>o.id===id);
+    const obj = pomoObjectives.find(o=>o.id===id) || pomoObjHistory.find(o=>o.id===id);
     if(!obj) return;
     pomoEditingId = id;
     document.getElementById('pomoObjNameInput').value = obj.name;
@@ -2322,15 +2344,21 @@
     }
 
     if(pomoEditingId){
-      const obj = pomoObjectives.find(o=>o.id===pomoEditingId);
+      let obj = pomoObjectives.find(o=>o.id===pomoEditingId);
+      const inHistory = !obj;
+      if(inHistory) obj = pomoObjHistory.find(o=>o.id===pomoEditingId);
       if(obj){
         obj.name = name;
         obj.color = pomoFormSelectedColor;
         obj.recurrence = recurrence;
         applyTargetFields(obj);
       }
-      savePomoObjectives();
-      if(obj) completeObjectiveIfNeeded(obj);
+      if(inHistory){
+        savePomoObjHistory();
+      } else {
+        savePomoObjectives();
+        if(obj) completeObjectiveIfNeeded(obj);
+      }
       renderPomoObjectives();
       renderPomoTimer();
       savePomoState();
