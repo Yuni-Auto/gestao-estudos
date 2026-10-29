@@ -252,6 +252,21 @@
   .pomo-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius-lg);box-shadow:var(--shadow);margin-bottom:20px;overflow:hidden;}
   .pomo-toggle{width:100%;display:flex;align-items:center;justify-content:space-between;gap:8px;background:var(--surface);border:none;padding:14px 20px;font-family:var(--font-body);font-weight:600;font-size:14px;color:var(--ink);text-align:left;border-bottom:1px solid var(--border-soft);}
   .pomo-toggle-left{display:flex;align-items:center;gap:9px;}
+  .pomo-header-actions{display:flex;align-items:center;gap:8px;}
+  .pomo-expand-btn .pomo-collapse-icon{display:none;}
+  .pomo-card.expanded{position:fixed;inset:0;z-index:1000;margin:0;border:0;border-radius:0;display:flex;flex-direction:column;overflow:auto;}
+  .pomo-card.expanded .pomo-toggle{flex-shrink:0;}
+  .pomo-card.expanded .pomo-body{flex:1;display:flex;}
+  .pomo-card.expanded .pomo-body-inner{width:100%;display:flex;align-items:center;justify-content:center;}
+  .pomo-card.expanded .pomo-layout{width:100%;align-items:center;}
+  .pomo-card.expanded .pomo-timer-col{flex:0 1 420px;gap:20px;}
+  .pomo-card.expanded .pomo-clock{font-size:clamp(72px,18vw,160px);}
+  .pomo-card.expanded .pomo-active-name{max-width:min(80vw,560px);font-size:16px;}
+  .pomo-card.expanded .pomo-controls{gap:12px;margin-top:12px;}
+  .pomo-card.expanded .pomo-controls .btn{font-size:15px;padding:12px 20px;}
+  .pomo-card.expanded .pomo-expand-btn .pomo-expand-icon{display:none;}
+  .pomo-card.expanded .pomo-expand-btn .pomo-collapse-icon{display:inline;}
+  body.pomo-expanded{overflow:hidden;}
 
   .pomo-body{display:grid;grid-template-rows:1fr;}
   .pomo-body-inner{overflow:hidden;min-height:0;}
@@ -425,6 +440,7 @@
   .fh-entry-chips{flex:1;display:flex;gap:8px;flex-wrap:wrap;min-width:0;}
   .fh-chip{display:inline-flex;align-items:center;gap:6px;background:var(--accent-soft);border:1px solid var(--accent-line);border-radius:999px;padding:6px 10px;font-size:12.5px;color:var(--ink);}
   .fh-chip.pomo-chip{background:var(--bg);border-color:var(--border);}
+  .fh-chip.pomo-topic-chip{background:#F3F4FF;border-color:#DDE2FF;}
   .fh-chip .fh-chip-dur{font-family:var(--font-mono);color:var(--ink-soft);padding-left:6px;border-left:1px solid var(--accent-line);}
   .fh-chip.pomo-chip .fh-chip-dur{border-left-color:var(--border);}
   .fh-chip-del{background:none;border:none;color:var(--ink-faint);cursor:pointer;font-size:12px;line-height:1;padding:0;display:flex;}
@@ -585,7 +601,13 @@
   <section class="pomo-card" id="pomoCard">
     <div class="pomo-toggle" id="pomoToggle">
       <span class="pomo-toggle-left"><span class="title-icon"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="13" r="7.5" stroke="#3856D6" stroke-width="1.6"/><path d="M12 13V9.5" stroke="#3856D6" stroke-width="1.6" stroke-linecap="round"/><path d="M9.5 3H14.5" stroke="#3856D6" stroke-width="1.6" stroke-linecap="round"/></svg></span> <span>Pomodoro por objetivo</span></span>
-      <button type="button" class="btn-icon" id="pomoSettingsBtn" title="Ajustar tempos">⚙️</button>
+      <span class="pomo-header-actions">
+        <button type="button" class="btn-icon pomo-expand-btn" id="pomoExpandBtn" title="Expandir Pomodoro" aria-label="Expandir Pomodoro" aria-expanded="false">
+          <span class="pomo-expand-icon" aria-hidden="true">⛶</span>
+          <span class="pomo-collapse-icon" aria-hidden="true">↙</span>
+        </button>
+        <button type="button" class="btn-icon" id="pomoSettingsBtn" title="Ajustar tempos" aria-label="Ajustar tempos">⚙️</button>
+      </span>
     </div>
     <div class="pomo-body" id="pomoBody">
       <div class="pomo-body-inner">
@@ -2541,6 +2563,28 @@
     return days;
   }
 
+  function getPomoTopicsForBucket(bucket){
+    const sessionsByTopic = new Map();
+    pomoSessions.forEach(session=>{
+      if(typeof session.start!=='number' || !Number.isFinite(session.start)) return;
+      const sessionDate = new Date(session.start);
+      const sessionKey = dateKey(sessionDate);
+      const belongsToBucket = fhView==='monthly'
+        ? sessionKey.slice(0,7)===bucket.key.slice(0,7)
+        : fhView==='weekly'
+          ? sessionKey>=dateKey(bucket.rangeStart) && sessionKey<=dateKey(bucket.rangeEnd)
+          : sessionKey===bucket.key;
+      if(!belongsToBucket) return;
+
+      const name = typeof session.name==='string' && session.name.trim() ? session.name.trim() : 'Pomodoro sem objetivo';
+      const groupKey = sessionKey+'|'+name;
+      const group = sessionsByTopic.get(groupKey) || {name, dateKey:sessionKey, count:0};
+      group.count += 1;
+      sessionsByTopic.set(groupKey, group);
+    });
+    return Array.from(sessionsByTopic.values());
+  }
+
   function renderFocusHistory(){
     const buckets = fhView==='monthly' ? buildMonthlyBuckets() : (fhView==='weekly' ? buildWeeklyBuckets() : buildDailyBuckets());
     const showPomo = document.getElementById('fhShowPomodoro').checked;
@@ -2607,6 +2651,13 @@
       if(b.pomodoro>0){
         chips += '<span class="fh-chip pomo-chip">🍅 Pomodoro<span class="fh-chip-dur">'+fhFormatMin(b.pomodoro)+'</span></span>';
       }
+      chips += getPomoTopicsForBucket(b).map(topic=>{
+        const prefix = fhView!=='daily' ? fmtDM(new Date(topic.dateKey+'T00:00:00'))+' · ' : '';
+        const sessionLabel = topic.count===1 ? '1 sessão' : topic.count+' sessões';
+        return '<span class="fh-chip pomo-topic-chip">📚 '+
+          (prefix ? '<span style="opacity:.7">'+prefix+'</span>' : '')+
+          escapeHtml(topic.name)+'<span class="fh-chip-dur">'+sessionLabel+'</span></span>';
+      }).join('');
       chips += b.manual.map(m=>{
         const prefix = m.dateKey ? fmtDM(new Date(m.dateKey+'T00:00:00'))+' · ' : '';
         return '<span class="fh-chip" data-entry-key="'+(m.dateKey||b.key)+'" data-entry-id="'+m.id+'">'+
@@ -2842,6 +2893,24 @@
   document.getElementById('pomoStartBtn').addEventListener('click', ()=>{ pomoRunning ? pomoPause() : pomoPlay(); });
   document.getElementById('pomoResetBtn').addEventListener('click', pomoReset);
   document.getElementById('pomoSkipBtn').addEventListener('click', pomoSkip);
+
+  function setPomoExpanded(expanded){
+    const card = document.getElementById('pomoCard');
+    const button = document.getElementById('pomoExpandBtn');
+    card.classList.toggle('expanded', expanded);
+    document.body.classList.toggle('pomo-expanded', expanded);
+    button.setAttribute('aria-expanded', String(expanded));
+    button.setAttribute('aria-label', expanded ? 'Reduzir Pomodoro' : 'Expandir Pomodoro');
+    button.title = expanded ? 'Reduzir Pomodoro' : 'Expandir Pomodoro';
+  }
+  document.getElementById('pomoExpandBtn').addEventListener('click', ()=>{
+    setPomoExpanded(!document.getElementById('pomoCard').classList.contains('expanded'));
+  });
+  document.addEventListener('keydown', e=>{
+    if(e.key==='Escape' && document.getElementById('pomoCard').classList.contains('expanded')){
+      setPomoExpanded(false);
+    }
+  });
 
   function initPomodoro(){
     pomoObjectives = loadPomoObjectives();
